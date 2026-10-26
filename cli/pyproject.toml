@@ -1,0 +1,18 @@
+[project]
+name = "dark-cli"
+version = "0.1.0"
+description = "AI red-teaming CLI for authorized security testing — verified, replayable findings"
+requires-python = ">=3.11"
+dependencies = [
+  "typer>=0.12",
+  "rich>=13.7",
+  "openai>=1.40",
+  "python-dotenv>=1.0",
+]
+
+[project.scripts]
+dark = "dark_cli.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

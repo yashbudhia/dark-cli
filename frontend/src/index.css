@@ -1,0 +1,79 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  background: #0b0d10;
+  color: #d7dce2;
+}
+
+.console {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 48px 24px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+h1 {
+  font-size: 20px;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot.up {
+  background: #3ddc84;
+}
+
+.dot.down {
+  background: #ff5c5c;
+}
+
+.sub {
+  color: #8b949e;
+  font-size: 13px;
+}
+
+.stats {
+  display: flex;
+  gap: 16px;
+  margin-top: 32px;
+}
+
+.stat {
+  flex: 1;
+  border: 1px solid #1f2630;
+  border-radius: 8px;
+  padding: 16px;
+  background: #10141a;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stat span {
+  color: #8b949e;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.stat strong {
+  font-size: 28px;
+}
