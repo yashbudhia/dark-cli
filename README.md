@@ -21,7 +21,7 @@ A finding only counts once it reproduces.
 |---|---|---|
 | `cli/` | Python + Typer | The `dark` command: scan, ctf, report |
 | `backend/` | FastAPI | Stores runs, findings, refusal telemetry; serves the dashboard |
-| `frontend/` | Vite + React | Findings dashboard |
+| `frontend/` | Next.js + React + TypeScript | Achilles landing-page recreation |
 
 ```mermaid
 flowchart LR
@@ -48,7 +48,7 @@ cd cli && pip install -e . && dark --help
 cd backend && pip install -e . && uvicorn app.main:app --reload
 
 # Frontend
-cd frontend && npm install && npm run dev   # http://localhost:5173
+cd frontend && npm install && npm run dev   # http://127.0.0.1:3000
 ```
 
 Model endpoints are configured via `.env` (see `.env.example`).

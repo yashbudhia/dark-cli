@@ -1,0 +1,102 @@
+{
+  "project": "https://framer.com/projects/Achilles-copy--PAwjxIDRIWUUuNTlXVxB-6Xu0j",
+  "reference": "https://getachilles.framer.ai/",
+  "assets": [
+    {
+      "file": "achilles-logo.svg",
+      "source": "https://framerusercontent.com/images/WAR8BrJbysy2gUruEVfrHAGVc.svg"
+    },
+    {
+      "file": "dashboard.png",
+      "source": "https://framerusercontent.com/images/KkrfxUhLX8jRxflp1C3lVtsSNiA.png"
+    },
+    {
+      "file": "use-case-bug.png",
+      "source": "https://framerusercontent.com/images/8myo3mQd5ebyPXyCZVpuPtJe70.png"
+    },
+    {
+      "file": "use-case-feature.png",
+      "source": "https://framerusercontent.com/images/ZhrPor8ZedXyIMplbN8HyE1QY.png"
+    },
+    {
+      "file": "use-case-tests.png",
+      "source": "https://framerusercontent.com/images/mKSZfAALRiXkEZj8WKGaEJS4d7E.png"
+    },
+    {
+      "file": "noise.png",
+      "source": "https://framerusercontent.com/images/6mcf62RlDfRfU61Yg5vb2pefpi4.png"
+    },
+    {
+      "file": "axiom.png",
+      "source": "https://framerusercontent.com/images/6RvHhjnrQ2ATCjCvBOTS7oi4.png"
+    },
+    {
+      "file": "cortex.png",
+      "source": "https://framerusercontent.com/images/6oSST105WFesPOBvMCzplBxhas.png"
+    },
+    {
+      "file": "ironclad.png",
+      "source": "https://framerusercontent.com/images/cxDMPNmU7oqZrPRnBmv1jzu0ck.png"
+    },
+    {
+      "file": "meridian.png",
+      "source": "https://framerusercontent.com/images/FWl8VFPWdiw0vJRifqdXxDcXc.png"
+    },
+    {
+      "file": "nexus.png",
+      "source": "https://framerusercontent.com/images/k9rM80OM5bWy8PO9ssnAxgfMlzE.png"
+    },
+    {
+      "file": "vaultix.png",
+      "source": "https://framerusercontent.com/images/tqBJ3caPUaf6S9cyLyIVc9DS6v8.png"
+    },
+    {
+      "file": "arthur.jpg",
+      "source": "https://framerusercontent.com/images/ONjFjJOjmJKUkxsVtaYneUJVcnM.jpg"
+    },
+    {
+      "file": "fonts/geist-mono.woff2",
+      "source": "https://fonts.gstatic.com/s/geistmono/v5/or3nQ6H-1_WfwkMZI_qYFrcdmg.woff2"
+    },
+    {
+      "file": "fonts/inter-regular.woff2",
+      "source": "https://framerusercontent.com/assets/GrgcKwrN6d3Uz8EwcLHZxwEfC4.woff2"
+    },
+    {
+      "file": "fonts/inter-medium.woff2",
+      "source": "https://framerusercontent.com/assets/UjlFhCnUjxhNfep4oYBPqnEssyo.woff2"
+    },
+    {
+      "file": "fonts/inter-display.woff2",
+      "source": "https://framerusercontent.com/assets/iwWTDc49ENF2tCHbqlNARXw6Ug.woff2"
+    },
+    {
+      "file": "fonts/jetbrains-mono.woff2",
+      "source": "https://framerusercontent.com/third-party-assets/fontshare/wf/WAVZNL4Z7TESTS4B4IIRZFODLSPP6FXA/E36Y7HT2GFM2VKF4G73CRBOSSERR73SW/33ZCUAC3GU2QVDMGY6EP3BNWHET5IUK4.woff2"
+    },
+    {
+      "file": "bands-fallback.png",
+      "source": "https://framerusercontent.com/images/3IJLNtjweQho9PNl12tZDwW4M.png"
+    },
+    {
+      "file": "bands-mobile-fallback.png",
+      "source": "https://framerusercontent.com/images/Bug1gV55GlocHtSojwH9Wwgz7M.png"
+    },
+    {
+      "file": "favicon.svg",
+      "source": "https://framerusercontent.com/assets/jyjbeSzjM2dREAsXjoQgX8De6M.svg"
+    }
+  ],
+  "derived": [
+    {
+      "file": "shaders/bands.frag",
+      "source": "https://framerusercontent.com/sites/a0kFuN6eKp9V0DBZhGF3K/shared-lib.DwG49T5K.mjs",
+      "note": "Original Bands fragment shader; uniform values from the connected project."
+    },
+    {
+      "file": "icons/*.svg",
+      "source": "https://getachilles.framer.ai/",
+      "note": "Original SVG geometry from published SVG definitions; IDs removed and color normalized for CSS masks."
+    }
+  ]
+}

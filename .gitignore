@@ -11,6 +11,7 @@ build/
 node_modules/
 frontend/dist/
 .next/
+frontend/next-env.d.ts
 *.tsbuildinfo
 .playwright-cli/
 output/
