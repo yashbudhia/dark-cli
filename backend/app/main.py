@@ -1,74 +1,154 @@
-"""dark-cli backend: stores runs, findings, and telemetry; serves the dashboard."""
+"""Dark API: MongoDB accounts, sessions and user-owned run records."""
 
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError, PyMongoError
+
+from .auth import AuthError, AuthService
+from .auth_routes import Principal, Service, router
+from .email import CloudflareMailer
 from .models import Finding, RefusalEvent, Run
+from .settings import Settings
 
-app = FastAPI(title="dark-cli backend", version="0.1.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# In-memory store for the scaffold; SQLite lands with milestone 3.
-_runs: dict[str, Run] = {}
-_findings: dict[str, Finding] = {}
-_refusals: dict[str, RefusalEvent] = {}
+load_dotenv()
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def create_app(
+    settings: Settings | None = None, *, database=None, mailer=None
+) -> FastAPI:
+    config = settings or Settings.from_env()
+    config.validate()
+
+    @asynccontextmanager
+    async def lifespan(application: FastAPI):
+        client = None
+        try:
+            db = database
+            if db is None and config.configured:
+                client = MongoClient(
+                    config.mongo_uri, serverSelectionTimeoutMS=5000, tz_aware=True
+                )
+                db = client[config.mongo_database]
+            if db is not None and len(config.auth_secret) >= 32:
+                auth = AuthService(db, config, mailer or CloudflareMailer(config))
+                auth.indexes()
+                application.state.auth = auth
+            yield
+        finally:
+            if client is not None:
+                client.close()
+
+    application = FastAPI(title="Dark API", version="0.2.0", lifespan=lifespan)
+    application.state.settings = config
+    application.state.auth = None
+    application.include_router(router)
+
+    @application.middleware("http")
+    async def private_responses(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
+    @application.exception_handler(AuthError)
+    async def auth_error(request: Request, exc: AuthError):
+        return JSONResponse(
+            status_code=exc.status, content={"error": exc.code, "detail": exc.message}
+        )
+
+    @application.exception_handler(PyMongoError)
+    async def database_error(request: Request, exc: PyMongoError):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Database is unavailable. Try again later."},
+        )
+
+    @application.get("/health")
+    def health() -> dict:
+        return {"status": "ok", "auth_configured": application.state.auth is not None}
+
+    def owned_run(auth: AuthService, owner: str, run_id: str) -> dict:
+        run = auth.db.runs.find_one({"owner_id": owner, "id": run_id})
+        if run is None:
+            raise HTTPException(404, "run not found")
+        return run
+
+    @application.post("/api/runs", status_code=201)
+    def create_run(run: Run, identity: Principal, auth: Service) -> Run:
+        try:
+            auth.db.runs.insert_one(
+                {**run.model_dump(mode="json"), "owner_id": identity[0]["_id"]}
+            )
+        except DuplicateKeyError as exc:
+            raise HTTPException(409, "run already exists") from exc
+        return run
+
+    @application.get("/api/runs")
+    def list_runs(identity: Principal, auth: Service) -> list[Run]:
+        return [
+            Run.model_validate(row)
+            for row in auth.db.runs.find({"owner_id": identity[0]["_id"]})
+        ]
+
+    @application.get("/api/runs/{run_id}")
+    def get_run(run_id: str, identity: Principal, auth: Service) -> Run:
+        return Run.model_validate(owned_run(auth, identity[0]["_id"], run_id))
+
+    @application.post("/api/runs/{run_id}/findings", status_code=201)
+    def add_finding(
+        run_id: str, finding: Finding, identity: Principal, auth: Service
+    ) -> Finding:
+        owner = identity[0]["_id"]
+        owned_run(auth, owner, run_id)
+        finding.run_id = run_id
+        auth.db.findings.replace_one(
+            {"owner_id": owner, "run_id": run_id, "id": finding.id},
+            {**finding.model_dump(mode="json"), "owner_id": owner},
+            upsert=True,
+        )
+        return finding
+
+    @application.get("/api/runs/{run_id}/findings")
+    def list_findings(run_id: str, identity: Principal, auth: Service) -> list[Finding]:
+        owner = identity[0]["_id"]
+        owned_run(auth, owner, run_id)
+        return [
+            Finding.model_validate(row)
+            for row in auth.db.findings.find({"owner_id": owner, "run_id": run_id})
+        ]
+
+    @application.post("/api/runs/{run_id}/refusals", status_code=201)
+    def add_refusal(
+        run_id: str, event: RefusalEvent, identity: Principal, auth: Service
+    ) -> RefusalEvent:
+        owner = identity[0]["_id"]
+        owned_run(auth, owner, run_id)
+        event.run_id = run_id
+        auth.db.refusals.replace_one(
+            {"owner_id": owner, "run_id": run_id, "id": event.id},
+            {**event.model_dump(mode="json"), "owner_id": owner},
+            upsert=True,
+        )
+        return event
+
+    @application.get("/api/runs/{run_id}/refusals")
+    def list_refusals(
+        run_id: str, identity: Principal, auth: Service
+    ) -> list[RefusalEvent]:
+        owner = identity[0]["_id"]
+        owned_run(auth, owner, run_id)
+        return [
+            RefusalEvent.model_validate(row)
+            for row in auth.db.refusals.find({"owner_id": owner, "run_id": run_id})
+        ]
+
+    return application
 
 
-@app.post("/api/runs", status_code=201)
-def create_run(run: Run) -> Run:
-    _runs[run.id] = run
-    return run
-
-
-@app.get("/api/runs")
-def list_runs() -> list[Run]:
-    return list(_runs.values())
-
-
-@app.get("/api/runs/{run_id}")
-def get_run(run_id: str) -> Run:
-    run = _runs.get(run_id)
-    if run is None:
-        raise HTTPException(status_code=404, detail="run not found")
-    return run
-
-
-@app.post("/api/runs/{run_id}/findings", status_code=201)
-def add_finding(run_id: str, finding: Finding) -> Finding:
-    if run_id not in _runs:
-        raise HTTPException(status_code=404, detail="run not found")
-    finding.run_id = run_id
-    _findings[finding.id] = finding
-    return finding
-
-
-@app.get("/api/runs/{run_id}/findings")
-def list_findings(run_id: str) -> list[Finding]:
-    return [f for f in _findings.values() if f.run_id == run_id]
-
-
-@app.post("/api/runs/{run_id}/refusals", status_code=201)
-def add_refusal(run_id: str, event: RefusalEvent) -> RefusalEvent:
-    if run_id not in _runs:
-        raise HTTPException(status_code=404, detail="run not found")
-    event.run_id = run_id
-    _refusals[event.id] = event
-    return event
-
-
-@app.get("/api/runs/{run_id}/refusals")
-def list_refusals(run_id: str) -> list[RefusalEvent]:
-    return [r for r in _refusals.values() if r.run_id == run_id]
+app = create_app()
