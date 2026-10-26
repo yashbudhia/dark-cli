@@ -10,6 +10,12 @@ The CLI is the driver; the backend is the store + dashboard; the frontend visual
 
 ## Milestones
 
+Current desktop increment: a pinned Windows MCP adapter, read-only probes with
+local evidence, explicit scenario execution, a disposable WinForms fixture, and
+an optional Jev next-step preview. This establishes the control/observation gate;
+it does not yet implement autonomous exploration or verified finding promotion.
+See the native Windows walkthrough in the repository README.
+
 1. **Model capability gate** (before product code)
    - Reads a screenshot accurately?
    - Locates and activates the correct control?

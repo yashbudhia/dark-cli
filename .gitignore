@@ -10,6 +10,10 @@ build/
 # Node
 node_modules/
 frontend/dist/
+.next/
+*.tsbuildinfo
+.playwright-cli/
+output/
 
 # Env & secrets
 .env
@@ -19,6 +23,8 @@ frontend/dist/
 # Local data
 *.db
 *.sqlite3
+.tools/
+.dark/
 
 # OS / editor
 .DS_Store

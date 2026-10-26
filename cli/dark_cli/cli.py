@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dotenv import load_dotenv
 import typer
+from dotenv import load_dotenv
+
+from .desktop.cli import app as desktop_app
 
 load_dotenv()
 
@@ -15,11 +17,14 @@ app = typer.Typer(
 
 ctf_app = typer.Typer(help="Sanctioned CTF challenges.", no_args_is_help=True)
 app.add_typer(ctf_app, name="ctf")
+app.add_typer(desktop_app, name="desktop")
 
 
 @app.command()
 def scan(
-    target: str = typer.Argument(..., help="Target to test (must be one you are authorized to test)"),
+    target: str = typer.Argument(
+        ..., help="Target to test (must be one you are authorized to test)"
+    ),
     goal: str = typer.Option(..., "--goal", help="What to test, e.g. 'Test the archive workflow'"),
 ) -> None:
     """Explore, challenge, verify, and report on an authorized target."""

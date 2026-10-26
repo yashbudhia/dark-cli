@@ -1,0 +1,11 @@
+{
+  "name": "Save a valid inventory quantity",
+  "window_title": "Dark Desktop Fixture",
+  "steps": [
+    {"action": "click", "automation_id": "resetButton"},
+    {"action": "assert_text", "automation_id": "statusLabel", "text": "Ready"},
+    {"action": "type", "automation_id": "quantityInput", "text": "3"},
+    {"action": "click", "automation_id": "saveButton"},
+    {"action": "assert_text", "automation_id": "statusLabel", "text": "Saved quantity: 3"}
+  ]
+}

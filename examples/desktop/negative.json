@@ -1,0 +1,11 @@
+{
+  "name": "Reject a negative inventory quantity (intentional fixture bug)",
+  "window_title": "Dark Desktop Fixture",
+  "steps": [
+    {"action": "click", "automation_id": "resetButton"},
+    {"action": "assert_text", "automation_id": "statusLabel", "text": "Ready"},
+    {"action": "type", "automation_id": "quantityInput", "text": "-2"},
+    {"action": "click", "automation_id": "saveButton"},
+    {"action": "assert_text", "automation_id": "statusLabel", "text": "Rejected: quantity must be nonnegative"}
+  ]
+}
