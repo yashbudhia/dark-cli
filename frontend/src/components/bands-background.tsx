@@ -53,7 +53,7 @@ export function BandsBackground() {
       gl!.shaderSource(shader, source);
       gl!.compileShader(shader);
       if (!gl!.getShaderParameter(shader, gl!.COMPILE_STATUS))
-        throw new Error("Shader compilation failed");
+        throw new Error(gl!.getShaderInfoLog(shader) || "Shader compilation failed");
       return shader;
     }
 
@@ -105,7 +105,7 @@ export function BandsBackground() {
 
     async function start() {
       try {
-        const response = await fetch("/framer/shaders/bands.frag", {
+        const response = await fetch("/dark/shaders/bands.frag", {
           signal: controller.signal,
         });
         if (!response.ok) throw new Error("Shader source unavailable");
@@ -120,7 +120,7 @@ export function BandsBackground() {
         );
         gl!.linkProgram(program);
         if (!gl!.getProgramParameter(program, gl!.LINK_STATUS))
-          throw new Error("Shader linking failed");
+          throw new Error(gl!.getProgramInfoLog(program) || "Shader linking failed");
         gl!.useProgram(program);
         buffer = gl!.createBuffer();
         gl!.bindBuffer(gl!.ARRAY_BUFFER, buffer);
@@ -150,7 +150,7 @@ export function BandsBackground() {
           ]),
         );
         gl!.uniform1i(gl!.getUniformLocation(program, "u_colors_length"), 3);
-        // Values read directly from the user's Framer Shader Background Layer.
+        // Tuned palette and band parameters.
         const uniforms = {
           u_seed: 210,
           u_speed: 0.3,
@@ -165,8 +165,10 @@ export function BandsBackground() {
         for (const [name, value] of Object.entries(uniforms))
           gl!.uniform1f(gl!.getUniformLocation(program, name), value);
         resume();
-      } catch {
-        // The original Framer fallback image stays visible if WebGL is unavailable.
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.warn("Bands animation unavailable:", error);
+        // The static fallback stays visible if WebGL is unavailable.
         canvas!.dataset.ready = "false";
       }
     }

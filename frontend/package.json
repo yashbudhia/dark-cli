@@ -8,8 +8,7 @@
     "build": "next build",
     "start": "next start --hostname 127.0.0.1 --port 3000",
     "typecheck": "next typegen && tsc --noEmit",
-    "lint": "eslint .",
-    "assets:sync": "node scripts/sync-assets.mjs"
+    "lint": "eslint ."
   },
   "dependencies": {
     "next": "16.4.3",

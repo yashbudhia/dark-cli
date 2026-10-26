@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Achilles — Your autonomous dev, always building",
+  title: "Dark — Test the behavior. Keep the proof.",
   description:
-    "Define the mission once. Achilles reads your codebase, writes the code, runs the tests, and opens the PR.",
-  icons: { icon: "/framer/favicon.svg" },
+    "Inspect native Windows apps, run explicit test scenarios, and save local evidence with Dark.",
+  icons: { icon: "/dark-mark.svg" },
 };
 
 export default function RootLayout({

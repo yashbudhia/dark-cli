@@ -1,5 +1,5 @@
-import { AchillesLanding } from "@/components/achilles-landing";
+import { DarkLanding } from "@/components/dark-landing";
 
 export default function Home() {
-  return <AchillesLanding />;
+  return <DarkLanding />;
 }

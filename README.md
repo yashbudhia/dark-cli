@@ -21,7 +21,7 @@ A finding only counts once it reproduces.
 |---|---|---|
 | `cli/` | Python + Typer | The `dark` command: scan, ctf, report |
 | `backend/` | FastAPI | Stores runs, findings, refusal telemetry; serves the dashboard |
-| `frontend/` | Next.js + React + TypeScript | Achilles landing-page recreation |
+| `frontend/` | Next.js + React + TypeScript | Dark product landing page |
 
 ```mermaid
 flowchart LR
