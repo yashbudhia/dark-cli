@@ -160,7 +160,7 @@ ul {
   background-image: repeating-radial-gradient(circle at 17% 29%, #fff 0, transparent 1px, transparent 3px);
   background-size: 7px 11px;
   background-position: center top;
-  opacity: 0.13;
+  opacity: 0.025;
 }
 .site-header {
   position: fixed;
