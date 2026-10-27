@@ -171,8 +171,10 @@ class AuthService:
         token, _ = self.issue_session(user["_id"], "web", "Browser")
         return public_user(user), token
 
-    def issue_session(self, user_id: str, kind: str, name: str) -> tuple[str, int]:
-        token = secrets.token_urlsafe(48)
+    def issue_session(
+        self, user_id: str, kind: str, name: str, *, token: str | None = None
+    ) -> tuple[str, int]:
+        token = token or secrets.token_urlsafe(48)
         lifetime = (7 if kind == "web" else 30) * 86400
         self.db.sessions.insert_one(
             {
@@ -197,7 +199,9 @@ class AuthService:
             raise AuthError(401, "Sign in to continue.", "unauthenticated")
         return user, session
 
-    def start_device(self, name: str, ip: str) -> dict:
+    def start_device(
+        self, name: str, ip: str, *, poll_interval: int = POLL_INTERVAL
+    ) -> dict:
         self.limit(f"device-ip:{ip}", 30, 600)
         for _ in range(3):
             code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(8))
@@ -211,7 +215,8 @@ class AuthService:
                         "status": "pending",
                         "created_at": now(),
                         "expires_at": now() + timedelta(seconds=PAIRING_TTL),
-                        "last_poll_at": now() - timedelta(seconds=POLL_INTERVAL),
+                        "last_poll_at": now() - timedelta(seconds=poll_interval),
+                        "poll_interval": poll_interval,
                     }
                 )
                 break
@@ -227,7 +232,7 @@ class AuthService:
             "verification_uri": uri,
             "verification_uri_complete": f"{uri}?{urlencode({'code': display})}",
             "expires_in": PAIRING_TTL,
-            "interval": POLL_INTERVAL,
+            "interval": poll_interval,
         }
 
     def device_info(self, code: str) -> dict:
@@ -261,10 +266,16 @@ class AuthService:
 
     def poll_device(self, code: str) -> dict:
         query = {"_id": self.digest("device", code), "expires_at": {"$gt": now()}}
+        existing = self.db.device_codes.find_one(query)
+        if existing and existing["status"] == "consumed":
+            return self.recover_device_token(code)
+        interval = (
+            existing.get("poll_interval", POLL_INTERVAL) if existing else POLL_INTERVAL
+        )
         entry = self.db.device_codes.find_one_and_update(
             {
                 **query,
-                "last_poll_at": {"$lte": now() - timedelta(seconds=POLL_INTERVAL)},
+                "last_poll_at": {"$lte": now() - timedelta(seconds=interval)},
             },
             {"$set": {"last_poll_at": now()}},
         )
@@ -274,7 +285,7 @@ class AuthService:
                     400,
                     "Wait before polling again.",
                     "slow_down",
-                    retry_after=POLL_INTERVAL,
+                    retry_after=interval,
                 )
             raise AuthError(
                 400, "Pairing request expired. Run dark login again.", "expired_token"
@@ -286,10 +297,40 @@ class AuthService:
         if entry["status"] == "denied":
             self.db.device_codes.delete_one(query)
             raise AuthError(400, "Connection was declined.", "access_denied")
-        entry = self.db.device_codes.find_one_and_delete(
-            {**query, "status": "approved"}
+        entry = self.db.device_codes.find_one_and_update(
+            {**query, "status": "approved"},
+            {"$set": {"status": "consumed"}},
         )
         if not entry:
-            raise AuthError(400, "Pairing request already used.", "expired_token")
-        token, lifetime = self.issue_session(entry["user_id"], "cli", entry["name"])
+            return self.recover_device_token(code)
+        # Derive an opaque token from the high-entropy device secret. Keeping only
+        # digests in Mongo lets the same terminal recover a lost HTTP response.
+        token, lifetime = self.issue_session(
+            entry["user_id"],
+            "cli",
+            entry["name"],
+            token=self.digest("device-session", code),
+        )
         return {"access_token": token, "token_type": "Bearer", "expires_in": lifetime}
+
+    def recover_device_token(self, code: str) -> dict:
+        token = self.digest("device-session", code)
+        session = self.db.sessions.find_one(
+            {
+                "_id": self.digest("session", token),
+                "kind": "cli",
+                "expires_at": {"$gt": now()},
+            }
+        )
+        if not session:
+            # Never recreate a revoked session on a retry.
+            raise AuthError(
+                400,
+                "Pairing is no longer available. Run dark login again.",
+                "expired_token",
+            )
+        return {
+            "access_token": token,
+            "token_type": "Bearer",
+            "expires_in": max(1, int((session["expires_at"] - now()).total_seconds())),
+        }

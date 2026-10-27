@@ -68,6 +68,7 @@ class VerifyRequest(BaseModel):
 
 
 class DeviceRequest(BaseModel):
+    poll_interval: int = Field(default=5, ge=2, le=5, strict=True)
     name: str = Field(
         default="Dark CLI", min_length=1, max_length=80, pattern=r"^[^\x00-\x1f\x7f]+$"
     )
@@ -156,7 +157,9 @@ def logout(response: Response, identity: Principal, auth: Service) -> None:
 
 @router.post("/device/code")
 def device_code(body: DeviceRequest, request: Request, auth: Service) -> dict:
-    return auth.start_device(body.name, client_ip(request))
+    return auth.start_device(
+        body.name, client_ip(request), poll_interval=body.poll_interval
+    )
 
 
 @router.post("/device/token")

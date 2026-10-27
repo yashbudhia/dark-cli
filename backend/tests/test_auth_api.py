@@ -217,9 +217,9 @@ def test_device_pending_polling_approval_and_replay(system):
     )
     token = client.post("/api/auth/device/token", json=body).json()["access_token"]
     assert (
-        client.post("/api/auth/device/token", json=body).json()["error"]
-        == "expired_token"
+        client.post("/api/auth/device/token", json=body).json()["access_token"] == token
     )
+    assert db.sessions.count_documents({"kind": "cli"}) == 1
     cli_headers = {"Authorization": f"Bearer {token}"}
     assert (
         client.get("/api/auth/me", headers=cli_headers).json()["session"]["kind"]
@@ -230,6 +230,48 @@ def test_device_pending_polling_approval_and_replay(system):
     # A CLI credential cannot approve another CLI or inspect browser device management.
     client.cookies.clear()
     assert client.get("/api/auth/devices", headers=cli_headers).status_code == 401
+
+
+def test_recovered_pairing_cannot_resurrect_a_revoked_session(system):
+    client, db, mail, _auth = system
+    sign_in(client, mail)
+    pairing = pair(client, db)
+    body = {"device_code": pairing["device_code"]}
+    token = client.post("/api/auth/device/token", json=body).json()["access_token"]
+    # Simulate a lost first response: retrying returns the same session, not a new one.
+    assert (
+        client.post("/api/auth/device/token", json=body).json()["access_token"] == token
+    )
+    device = client.get("/api/auth/devices").json()[0]
+    assert (
+        client.delete(f"/api/auth/devices/{device['id']}", headers=WEB).status_code
+        == 204
+    )
+    assert (
+        client.post("/api/auth/device/token", json=body).json()["error"]
+        == "expired_token"
+    )
+    assert db.sessions.count_documents({"kind": "cli"}) == 0
+    assert token not in str(list(db.device_codes.find()))
+
+
+def test_fast_polling_is_negotiated_without_changing_older_clients(system):
+    client, _db, _mail, _auth = system
+    old = client.post("/api/auth/device/code", json={"name": "old"}).json()
+    new = client.post(
+        "/api/auth/device/code", json={"name": "new", "poll_interval": 2}
+    ).json()
+    assert old["interval"] == 5 and new["interval"] == 2
+    body = {"device_code": new["device_code"]}
+    assert (
+        client.post("/api/auth/device/token", json=body).json()["error"]
+        == "authorization_pending"
+    )
+    response = client.post("/api/auth/device/token", json=body)
+    assert (
+        response.json()["error"] == "slow_down"
+        and response.headers["Retry-After"] == "2"
+    )
 
 
 @pytest.mark.parametrize("approved", [False, True])
