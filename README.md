@@ -72,8 +72,9 @@ dark doctor
 The npm package bundles the Python client and installs its runtime on first use;
 users need Node.js 20.11+ and do not need a repo checkout or Python installation.
 Windows desktop commands also install their pinned MCP dependency on first use.
-See [npm packaging and release steps](npm/README.md). Until the first npm publish,
-build with `npm pack` in `npm/` and install the generated `.tgz` instead.
+The package is published at [dark-agent-cli on npm](https://www.npmjs.com/package/dark-agent-cli).
+For local release testing, build with `npm pack` in `npm/` and install the generated
+`.tgz`. See [npm packaging and release steps](npm/README.md).
 
 To run your own backend and website locally:
 
