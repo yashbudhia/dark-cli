@@ -4,6 +4,7 @@ from app.auth import now
 from app.main import create_app
 from app.settings import Settings
 from fastapi.testclient import TestClient
+from pymongo.errors import DuplicateKeyError
 
 
 @pytest.fixture
@@ -108,3 +109,21 @@ def test_import_rejects_arbitrary_identifiers(api):
         ).status_code
         == 422
     )
+
+
+def test_idempotent_import_recovers_from_a_concurrent_unique_key_collision(
+    api, monkeypatch
+):
+    client, db, headers = api
+    original = db.runs.replace_one
+
+    def racing_import(query, document, **kwargs):
+        if kwargs.get("upsert"):
+            db.runs.insert_one(document)
+            raise DuplicateKeyError("Report inserted by another request")
+        return original(query, document, **kwargs)
+
+    monkeypatch.setattr(db.runs, "replace_one", racing_import)
+    result = client.put("/api/runs/import/" + "d" * 64, headers=headers, json=report())
+    assert result.status_code == 200
+    assert db.runs.count_documents({}) == 1

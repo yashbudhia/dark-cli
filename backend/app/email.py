@@ -20,13 +20,7 @@ class CloudflareMailer:
 
     def send_code(self, email: str, code: str) -> None:
         config = self.settings
-        if not all(
-            (
-                config.cloudflare_account_id,
-                config.cloudflare_api_token,
-                config.email_from,
-            )
-        ):
+        if not config.email_configured:
             raise EmailDeliveryError("Email delivery is not configured yet.")
         try:
             with httpx.Client(timeout=15, transport=self.transport) as client:
@@ -48,9 +42,29 @@ class CloudflareMailer:
                 )
                 response.raise_for_status()
                 payload = response.json()
-                result = payload.get("result", {})
-                accepted = result.get("delivered", []) + result.get("queued", [])
-                if not payload.get("success") or email not in accepted:
+                result = payload.get("result") if isinstance(payload, dict) else None
+                if not isinstance(result, dict):
+                    raise EmailDeliveryError(
+                        "Email delivery returned an invalid response. Try again later."
+                    )
+                delivered, queued, bounced = (
+                    result.get("delivered", []),
+                    result.get("queued", []),
+                    result.get("permanent_bounces", []),
+                )
+                if not all(
+                    isinstance(values, list)
+                    and all(isinstance(item, str) for item in values)
+                    for values in (delivered, queued, bounced)
+                ):
+                    raise EmailDeliveryError(
+                        "Email delivery returned an invalid response. Try again later."
+                    )
+                if (
+                    payload.get("success") is not True
+                    or email not in delivered + queued
+                    or email in bounced
+                ):
                     raise EmailDeliveryError(
                         "Email was not accepted for delivery. Try again later."
                     )

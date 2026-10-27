@@ -23,8 +23,16 @@ CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 class AuthError(Exception):
-    def __init__(self, status: int, message: str, code: str = "invalid_request"):
+    def __init__(
+        self,
+        status: int,
+        message: str,
+        code: str = "invalid_request",
+        *,
+        retry_after: int | None = None,
+    ):
         self.status, self.message, self.code = status, message, code
+        self.retry_after = retry_after
         super().__init__(message)
 
 
@@ -71,19 +79,35 @@ class AuthService:
         ).hexdigest()
 
     def limit(self, key: str, maximum: int, seconds: int) -> None:
-        bucket = int(time.time()) // seconds
-        entry = self.db.auth_limits.find_one_and_update(
-            {"_id": self.digest("limit", f"{key}:{bucket}")},
-            {
-                "$inc": {"count": 1},
-                "$setOnInsert": {"expires_at": now() + timedelta(seconds=seconds * 2)},
-            },
-            upsert=True,
-            return_document=ReturnDocument.AFTER,
-        )
+        timestamp = int(time.time())
+        bucket = timestamp // seconds
+        query = {"_id": self.digest("limit", f"{key}:{bucket}")}
+        update = {
+            "$inc": {"count": 1},
+            "$setOnInsert": {"expires_at": now() + timedelta(seconds=seconds * 2)},
+        }
+        try:
+            entry = self.db.auth_limits.find_one_and_update(
+                query,
+                update,
+                upsert=True,
+                return_document=ReturnDocument.AFTER,
+            )
+        except DuplicateKeyError:
+            # Another worker inserted this bucket after our upsert's query phase.
+            entry = self.db.auth_limits.find_one_and_update(
+                query,
+                {"$inc": {"count": 1}},
+                return_document=ReturnDocument.AFTER,
+            )
+            if entry is None:
+                raise
         if entry["count"] > maximum:
             raise AuthError(
-                429, "Too many attempts. Wait a minute and try again.", "rate_limited"
+                429,
+                "Too many attempts. Wait for the cooldown and try again.",
+                "rate_limited",
+                retry_after=seconds - timestamp % seconds,
             )
 
     def request_email(self, email: str, ip: str) -> dict:
@@ -130,12 +154,18 @@ class AuthService:
         # Atomic delete makes a successful code single-use, including concurrent requests.
         if not self.db.email_codes.find_one_and_delete({"_id": entry["_id"]}):
             raise AuthError(400, "Code has already been used.", "invalid_code")
-        user = self.db.users.find_one_and_update(
-            {"email": entry["email"]},
-            {"$setOnInsert": {"_id": secrets.token_hex(16), "created_at": now()}},
-            upsert=True,
-            return_document=ReturnDocument.AFTER,
-        )
+        try:
+            user = self.db.users.find_one_and_update(
+                {"email": entry["email"]},
+                {"$setOnInsert": {"_id": secrets.token_hex(16), "created_at": now()}},
+                upsert=True,
+                return_document=ReturnDocument.AFTER,
+            )
+        except DuplicateKeyError:
+            # Separate valid challenges for the same email may finish concurrently.
+            user = self.db.users.find_one({"email": entry["email"]})
+            if user is None:
+                raise
         token, _ = self.issue_session(user["_id"], "web", "Browser")
         return public_user(user), token
 
@@ -238,7 +268,12 @@ class AuthService:
         )
         if not entry:
             if self.db.device_codes.find_one(query):
-                raise AuthError(400, "Wait before polling again.", "slow_down")
+                raise AuthError(
+                    400,
+                    "Wait before polling again.",
+                    "slow_down",
+                    retry_after=POLL_INTERVAL,
+                )
             raise AuthError(
                 400, "Pairing request expired. Run dark login again.", "expired_token"
             )

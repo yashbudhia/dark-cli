@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool, field_validator
+from pymongo.errors import PyMongoError
 
 from .auth import COOKIE_NAME, AuthError, AuthService, now, public_user
 
@@ -71,6 +72,14 @@ class DeviceRequest(BaseModel):
         default="Dark CLI", min_length=1, max_length=80, pattern=r"^[^\x00-\x1f\x7f]+$"
     )
 
+    @field_validator("name")
+    @classmethod
+    def meaningful_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Computer name must not be empty")
+        return value
+
 
 class PollRequest(BaseModel):
     device_code: str = Field(min_length=20, max_length=128)
@@ -78,7 +87,28 @@ class PollRequest(BaseModel):
 
 class DecisionRequest(BaseModel):
     user_code: str = Field(min_length=8, max_length=12)
-    approve: bool
+    approve: StrictBool
+
+
+@router.get("/readiness")
+def readiness(request: Request, response: Response) -> dict:
+    config = request.app.state.settings
+    auth = request.app.state.auth
+    reachable = False
+    if auth is not None:
+        try:
+            reachable = auth.db.command("ping").get("ok") == 1
+        except PyMongoError:
+            pass
+    checks = {
+        "database_configured": bool(config.mongo_uri or auth is not None),
+        "auth_secret_configured": len(config.auth_secret) >= 32,
+        "email_configured": config.email_configured,
+        "mongodb_reachable": reachable,
+    }
+    ready = all(checks.values()) and auth is not None
+    response.status_code = 200 if ready else 503
+    return {"ready": ready, "checks": checks, "email_delivery_verified": False}
 
 
 @router.post("/email/request", dependencies=[Depends(browser_origin)])

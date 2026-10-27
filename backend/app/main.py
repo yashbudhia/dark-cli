@@ -32,7 +32,12 @@ def create_app(
             db = database
             if db is None and config.configured:
                 client = MongoClient(
-                    config.mongo_uri, serverSelectionTimeoutMS=5000, tz_aware=True
+                    config.mongo_uri,
+                    serverSelectionTimeoutMS=5000,
+                    connectTimeoutMS=5000,
+                    socketTimeoutMS=5000,
+                    waitQueueTimeoutMS=5000,
+                    tz_aware=True,
                 )
                 db = client[config.mongo_database]
             if db is not None and len(config.auth_secret) >= 32:
@@ -59,7 +64,11 @@ def create_app(
     @application.exception_handler(AuthError)
     async def auth_error(request: Request, exc: AuthError):
         return JSONResponse(
-            status_code=exc.status, content={"error": exc.code, "detail": exc.message}
+            status_code=exc.status,
+            content={"error": exc.code, "detail": exc.message},
+            headers={"Retry-After": str(exc.retry_after)}
+            if exc.retry_after is not None
+            else None,
         )
 
     @application.exception_handler(PyMongoError)
@@ -78,6 +87,14 @@ def create_app(
         if run is None:
             raise HTTPException(404, "run not found")
         return run
+
+    def replace_owned(collection, query: dict, value: dict) -> None:
+        try:
+            collection.replace_one(query, value, upsert=True)
+        except DuplicateKeyError:
+            # Concurrent idempotent imports may race to insert the unique owner/id.
+            if not collection.replace_one(query, value).matched_count:
+                raise
 
     @application.post("/api/runs", status_code=201)
     def create_run(run: Run, identity: Principal, auth: Service) -> Run:
@@ -119,10 +136,10 @@ def create_app(
             desktop_report=report,
         )
         # Stable import IDs make a retry after an ambiguous network failure safe.
-        auth.db.runs.replace_one(
+        replace_owned(
+            auth.db.runs,
             {"owner_id": owner, "id": run.id},
             {**run.model_dump(mode="json"), "owner_id": owner},
-            upsert=True,
         )
         return run
 
@@ -137,10 +154,10 @@ def create_app(
         owner = identity[0]["_id"]
         owned_run(auth, owner, run_id)
         finding.run_id = run_id
-        auth.db.findings.replace_one(
+        replace_owned(
+            auth.db.findings,
             {"owner_id": owner, "run_id": run_id, "id": finding.id},
             {**finding.model_dump(mode="json"), "owner_id": owner},
-            upsert=True,
         )
         return finding
 
@@ -160,10 +177,10 @@ def create_app(
         owner = identity[0]["_id"]
         owned_run(auth, owner, run_id)
         event.run_id = run_id
-        auth.db.refusals.replace_one(
+        replace_owned(
+            auth.db.refusals,
             {"owner_id": owner, "run_id": run_id, "id": event.id},
             {**event.model_dump(mode="json"), "owner_id": owner},
-            upsert=True,
         )
         return event
 
