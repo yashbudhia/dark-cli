@@ -10,10 +10,7 @@ from typing import Any
 
 import typer
 
-from .decisions import choose_route
 from .evidence import Evidence
-from .scenario import exercise, load_scenario
-from .windows import REQUIRED_TOOLS, connect, executable, repository_root, snapshot_text
 
 app = typer.Typer(
     help="Inspect Windows apps, record evidence, and run explicit desktop exercises.",
@@ -46,6 +43,8 @@ def run(coro: Coroutine[Any, Any, Any], evidence: Evidence | None = None) -> Any
 
 
 def recorder(output: Path | None) -> Evidence:
+    from .windows import repository_root
+
     return Evidence(output or repository_root() / ".dark" / "runs")
 
 
@@ -54,6 +53,8 @@ def doctor() -> None:
     """Check the actual executable and MCP tool handshake; no API key needed."""
 
     async def check() -> dict[str, Any]:
+        from .windows import REQUIRED_TOOLS, connect, executable
+
         async with connect() as desktop:
             return {
                 "status": "ready",
@@ -70,6 +71,8 @@ def windows() -> None:
     """List observable windows. Select an exact title for subsequent commands."""
 
     async def collect() -> Any:
+        from .windows import connect
+
         async with connect() as desktop:
             return await desktop.windows()
 
@@ -95,6 +98,8 @@ def probe(
     evidence = recorder(output)
 
     async def inspect() -> dict[str, Any]:
+        from .windows import connect, snapshot_text
+
         async with connect(evidence) as desktop:
             window = await desktop.select(title)
             state = await desktop.snapshot(str(window["handle"]))
@@ -146,6 +151,9 @@ def decide(
     evidence = recorder(output)
 
     async def preview() -> dict[str, Any]:
+        from .decisions import choose_route
+        from .windows import connect
+
         async with connect(evidence) as desktop:
             window = await desktop.select(title)
             state = await desktop.snapshot(str(window["handle"]))
@@ -166,6 +174,8 @@ def run_exercise(
     output: Path | None = typer.Option(None, "--output"),
 ) -> None:
     """Validate or execute a JSON scenario. Re-running re-discovers every control."""
+    from .scenario import exercise, load_scenario
+
     try:
         spec = load_scenario(scenario)
     except (ValueError, OSError) as exc:
@@ -177,6 +187,8 @@ def run_exercise(
     evidence = recorder(output)
 
     async def execute() -> dict[str, Any]:
+        from .windows import connect
+
         async with connect(evidence) as desktop:
             return await exercise(desktop, spec, evidence)
 

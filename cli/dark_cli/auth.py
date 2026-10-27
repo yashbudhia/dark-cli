@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import json
+import re
 import socket
 import time
 import webbrowser
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import keyring
 import typer
 from keyring.errors import KeyringError
+
+from .config import ConfigError, configured_server, remember_server
 
 
 class LoginError(Exception):
@@ -18,52 +22,96 @@ class LoginError(Exception):
 
 
 def server_url(value: str) -> str:
-    value = value.rstrip("/")
-    parsed = urlsplit(value)
+    try:
+        if any(ord(character) < 33 or ord(character) == 127 for character in value):
+            raise ValueError("Control character in origin")
+        value = value.rstrip("/")
+        parsed = urlsplit(value)
+        port = parsed.port
+        if (
+            parsed.scheme not in ("https", "http")
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+            or (port is not None and not 1 <= port <= 65535)
+            or (
+                parsed.scheme == "http" and parsed.hostname not in ("localhost", "127.0.0.1", "::1")
+            )
+        ):
+            raise ValueError("Invalid origin")
+        return str(httpx.URL(value)).rstrip("/")
+    except (ValueError, httpx.InvalidURL) as exc:
+        raise LoginError("Use an HTTPS website origin; HTTP is allowed only on loopback.") from exc
+
+
+def account_email(data: dict) -> str:
+    user = data.get("user")
+    email = user.get("email") if isinstance(user, dict) else None
     if (
-        parsed.scheme not in ("https", "http")
-        or not parsed.hostname
-        or parsed.username
-        or parsed.password
-        or parsed.path
-        or parsed.query
-        or parsed.fragment
-        or (parsed.scheme == "http" and parsed.hostname not in ("localhost", "127.0.0.1", "::1"))
+        not isinstance(email, str)
+        or not 3 <= len(email) <= 254
+        or "@" not in email
+        or any(ord(c) < 32 or ord(c) == 127 for c in email)
     ):
-        raise LoginError("Use an HTTPS website origin; HTTP is allowed only on loopback.")
-    return value
+        raise LoginError("Dark server returned an invalid account response.")
+    return email
 
 
 class Credentials:
     def __init__(self, server: str):
         self.service = f"dark-cli:{server}"
 
+    @staticmethod
+    def backend():
+        backend = keyring.get_keyring()
+        candidates = (
+            backend.backends
+            if type(backend).__module__ == "keyring.backends.chainer"
+            else [backend]
+        )
+        supported = (
+            "keyring.backends.Windows",
+            "keyring.backends.macOS",
+            "keyring.backends.SecretService",
+            "keyring.backends.kwallet",
+            "keyring.backends.libsecret",
+        )
+        for candidate in candidates:
+            if type(candidate).__module__.startswith(supported) and candidate.priority > 0:
+                return candidate
+        raise LoginError(
+            "No supported OS credential store is available. Configure a native keyring first."
+        )
+
     def get(self) -> str | None:
         try:
-            backend = keyring.get_keyring()
-            if backend.priority <= 0 or type(backend).__module__.startswith("keyrings.alt"):
-                raise LoginError("No OS credential store is available. Configure a keyring first.")
-            return keyring.get_password(self.service, "session")
-        except (KeyringError, RuntimeError) as exc:
+            return self.backend().get_password(self.service, "session")
+        except (KeyringError, RuntimeError, OSError) as exc:
             raise LoginError("The OS credential store is unavailable or locked.") from exc
 
     def set(self, token: str) -> None:
         try:
-            keyring.set_password(self.service, "session", token)
-        except (KeyringError, RuntimeError) as exc:
+            self.backend().set_password(self.service, "session", token)
+        except (KeyringError, RuntimeError, OSError) as exc:
             raise LoginError("Could not save the session in the OS credential store.") from exc
 
     def delete(self) -> None:
         try:
             if self.get() is not None:
-                keyring.delete_password(self.service, "session")
-        except (KeyringError, RuntimeError) as exc:
+                self.backend().delete_password(self.service, "session")
+        except (KeyringError, RuntimeError, OSError) as exc:
             raise LoginError("Could not remove the local session.") from exc
 
 
 class AccountClient:
-    def __init__(self, server: str, transport: httpx.BaseTransport | None = None):
-        self.server = server_url(server)
+    def __init__(self, server: str | None, transport: httpx.BaseTransport | None = None):
+        try:
+            self.server = server_url(configured_server(server))
+        except ConfigError as exc:
+            raise LoginError(str(exc)) from exc
         self.http = httpx.Client(base_url=self.server, timeout=15, transport=transport)
 
     def close(self) -> None:
@@ -85,13 +133,22 @@ class AccountClient:
             ) from exc
 
     @staticmethod
-    def require_success(response: httpx.Response) -> dict:
+    def require_success(response: httpx.Response, *, expect_list: bool = False) -> dict | list:
         if response.status_code == 401:
             raise LoginError("Session expired or revoked. Run dark login again.")
         if not response.is_success:
+            if response.status_code == 503:
+                raise LoginError(
+                    "Dark service is not ready. Run dark doctor to check configuration and storage."
+                )
+            if response.status_code == 429:
+                raise LoginError("Too many requests. Wait a minute before trying again.")
             raise LoginError(f"Dark server returned HTTP {response.status_code}. Try again later.")
         try:
-            return response.json()
+            result = response.json()
+            if not isinstance(result, list if expect_list else dict):
+                raise ValueError("Unexpected JSON shape")
+            return result
         except ValueError as exc:
             raise LoginError("Dark server returned an invalid response.") from exc
 
@@ -113,25 +170,41 @@ class AccountClient:
         )
         try:
             uri = pairing["verification_uri_complete"]
+            if not isinstance(uri, str) or any(ord(c) < 33 or ord(c) == 127 for c in uri):
+                raise ValueError("Invalid verification URL")
             parsed = urlsplit(uri)
             if (
                 server_url(f"{parsed.scheme}://{parsed.netloc}") != self.server
                 or parsed.path != "/connect"
+                or parsed.fragment
             ):
                 raise ValueError("Unexpected verification origin")
             device_code, display_code = pairing["device_code"], pairing["user_code"]
-            interval, lifetime = int(pairing["interval"]), int(pairing["expires_in"])
+            if not isinstance(device_code, str) or not re.fullmatch(
+                r"[A-Za-z0-9_-]{32,128}", device_code
+            ):
+                raise ValueError("Invalid device code")
+            if not isinstance(display_code, str) or not re.fullmatch(
+                r"[A-Z2-9]{4}-[A-Z2-9]{4}", display_code
+            ):
+                raise ValueError("Invalid display code")
+            if parse_qs(parsed.query).get("code") != [display_code]:
+                raise ValueError("Verification code mismatch")
+            interval, lifetime = pairing["interval"], pairing["expires_in"]
+            if type(interval) is not int or type(lifetime) is not int:
+                raise ValueError("Invalid timing types")
             if not (5 <= interval <= 30 and 1 <= lifetime <= 600):
                 raise ValueError("Invalid timing")
         except (KeyError, TypeError, ValueError) as exc:
             raise LoginError("Dark server returned an invalid pairing request.") from exc
+        deadline = clock() + lifetime
         notify(f"Open {uri}\nConfirm this code in your browser: {display_code}")
         if not no_browser:
             try:
-                open_browser(uri)
-            except webbrowser.Error:
+                if open_browser(uri) is False:
+                    notify("Could not open the browser. Open the URL above manually.")
+            except (webbrowser.Error, OSError):
                 notify("Could not open the browser. Open the URL above manually.")
-        deadline = clock() + lifetime
         while clock() < deadline:
             sleep(min(interval, max(0, deadline - clock())))
             if clock() >= deadline:
@@ -142,7 +215,7 @@ class AccountClient:
             if response.is_success:
                 payload = self.require_success(response)
                 token = payload.get("access_token")
-                if not isinstance(token, str) or len(token) < 32:
+                if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token):
                     raise LoginError("Dark server did not return a valid session.")
                 return token
             try:
@@ -164,8 +237,76 @@ class AccountClient:
 
 def register(app: typer.Typer) -> None:
     @app.command()
+    def doctor(
+        server: str | None = typer.Option(None, envvar="DARK_SERVER_URL"),
+        json_output: bool = typer.Option(
+            False, "--json", help="Print a machine-readable readiness summary."
+        ),
+    ) -> None:
+        """Check service configuration and MongoDB connectivity without sending email."""
+        client = None
+        try:
+            client = AccountClient(server)
+            response = client.request("GET", "/api/auth/readiness")
+            if response.status_code not in (200, 503):
+                client.require_success(response)
+            try:
+                data = response.json()
+                names = (
+                    "database_configured",
+                    "auth_secret_configured",
+                    "email_configured",
+                    "mongodb_reachable",
+                )
+                checks = {name: data["checks"][name] for name in names}
+                if (
+                    any(type(value) is not bool for value in checks.values())
+                    or type(data["ready"]) is not bool
+                ):
+                    raise ValueError("Invalid readiness status")
+                ready = data["ready"] and all(checks.values()) and response.status_code == 200
+            except (ValueError, TypeError, KeyError) as exc:
+                raise LoginError("Dark server returned an invalid readiness response.") from exc
+            if json_output:
+                typer.echo(
+                    json.dumps(
+                        {
+                            "server": client.server,
+                            "ready": ready,
+                            "checks": checks,
+                            "email_delivery_verified": False,
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                typer.echo(f"Server: {client.server}")
+                labels = {
+                    "database_configured": "MongoDB configured",
+                    "auth_secret_configured": "Auth secret configured",
+                    "email_configured": "Email sending configured",
+                    "mongodb_reachable": "MongoDB reachable",
+                }
+                for name, passed in checks.items():
+                    typer.echo(f"{'OK' if passed else 'MISSING'}  {labels[name]}")
+                typer.echo("Email delivery: not verified by this check.")
+                typer.echo(
+                    "Service configuration and storage are ready."
+                    if ready
+                    else "Configure the missing settings and restart the service."
+                )
+            if not ready:
+                raise typer.Exit(2)
+        except LoginError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(1) from exc
+        finally:
+            if client:
+                client.close()
+
+    @app.command()
     def login(
-        server: str = typer.Option("http://127.0.0.1:3000", envvar="DARK_SERVER_URL"),
+        server: str | None = typer.Option(None, envvar="DARK_SERVER_URL"),
         no_browser: bool = typer.Option(
             False, "--no-browser", help="Print the URL without opening it."
         ),
@@ -179,7 +320,12 @@ def register(app: typer.Typer) -> None:
             if existing:
                 response = client.request("GET", "/api/auth/me", token=existing)
                 if response.is_success:
-                    typer.echo("Already connected. Run dark whoami or dark logout.")
+                    email = account_email(client.require_success(response))
+                    try:
+                        remember_server(client.server)
+                    except ConfigError as exc:
+                        typer.echo(str(exc), err=True)
+                    typer.echo(f"Already connected as {email}. Run dark whoami or dark logout.")
                     return
                 if response.status_code != 401:
                     client.require_success(response)
@@ -187,10 +333,26 @@ def register(app: typer.Typer) -> None:
             token = client.login(no_browser=no_browser)
             try:
                 credentials.set(token)
-            except LoginError:
-                client.request("POST", "/api/auth/logout", token=token)
+            except LoginError as exc:
+                try:
+                    response = client.request("POST", "/api/auth/logout", token=token)
+                    if not response.is_success and response.status_code != 401:
+                        raise LoginError("Revocation failed")
+                except LoginError:
+                    raise LoginError(
+                        "Could not save the session or confirm remote revocation. Revoke this computer from your website workspace."
+                    ) from exc
                 raise
+            try:
+                remember_server(client.server)
+            except ConfigError as exc:
+                typer.echo(str(exc), err=True)
             typer.echo("Connected. Your session is saved in the OS credential store.")
+        except KeyboardInterrupt as exc:
+            typer.echo(
+                "Login cancelled. Any pending pairing code will expire automatically.", err=True
+            )
+            raise typer.Exit(130) from exc
         except LoginError as exc:
             typer.echo(str(exc), err=True)
             raise typer.Exit(1) from exc
@@ -200,7 +362,7 @@ def register(app: typer.Typer) -> None:
 
     @app.command()
     def whoami(
-        server: str = typer.Option("http://127.0.0.1:3000", envvar="DARK_SERVER_URL"),
+        server: str | None = typer.Option(None, envvar="DARK_SERVER_URL"),
     ) -> None:
         """Show the account connected to this CLI."""
         client = None
@@ -210,7 +372,7 @@ def register(app: typer.Typer) -> None:
             if not token:
                 raise LoginError("Not connected. Run dark login.")
             data = client.require_success(client.request("GET", "/api/auth/me", token=token))
-            typer.echo(f"{data['user']['email']}\nServer: {client.server}")
+            typer.echo(f"{account_email(data)}\nServer: {client.server}")
         except LoginError as exc:
             typer.echo(str(exc), err=True)
             raise typer.Exit(1) from exc
@@ -220,7 +382,7 @@ def register(app: typer.Typer) -> None:
 
     @app.command()
     def logout(
-        server: str = typer.Option("http://127.0.0.1:3000", envvar="DARK_SERVER_URL"),
+        server: str | None = typer.Option(None, envvar="DARK_SERVER_URL"),
         local_only: bool = typer.Option(
             False, "--local-only", help="Forget this credential without revoking it remotely."
         ),

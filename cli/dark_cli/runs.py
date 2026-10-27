@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import webbrowser
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +15,7 @@ from pydantic import BaseModel, Field, StrictBool, ValidationError
 
 from .auth import AccountClient, Credentials, LoginError
 
-app = typer.Typer(help="Upload saved desktop reports to your account.", no_args_is_help=True)
+app = typer.Typer(help="Upload, list, and inspect saved desktop reports.", no_args_is_help=True)
 MAX_REPORT_BYTES = 256 * 1024
 
 
@@ -42,6 +43,104 @@ class LocalReport(BaseModel):
     assertions: list[Assertion] = Field(default_factory=list, max_length=100)
     reason: str | None = Field(default=None, max_length=10000)
     error: str | None = Field(default=None, max_length=10000)
+
+
+class SavedRun(BaseModel):
+    id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+    target: str
+    goal: str
+    status: str = Field(pattern=r"^[a-z_]{1,40}$")
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    kind: Literal["scan", "desktop"] = "scan"
+    desktop_report: dict | None = None
+
+
+def display_text(value: str) -> str:
+    return " ".join(
+        "".join(
+            character for character in value if character.isprintable() or character.isspace()
+        ).split()
+    )
+
+
+def connected_token(client: AccountClient) -> str:
+    token = Credentials(client.server).get()
+    if not token:
+        raise LoginError("Not connected. Run dark login before accessing saved reports.")
+    return token
+
+
+@app.command("list")
+def list_runs(
+    server: str | None = typer.Option(None, envvar="DARK_SERVER_URL"),
+    json_output: bool = typer.Option(False, "--json", help="Print the latest saved runs as JSON."),
+) -> None:
+    """List the latest 100 saved runs in your account."""
+    client = None
+    try:
+        client = AccountClient(server)
+        token = connected_token(client)
+        rows = client.require_success(
+            client.request("GET", "/api/runs", token=token), expect_list=True
+        )
+        try:
+            records = [SavedRun.model_validate(row) for row in rows]
+        except ValidationError as exc:
+            raise LoginError("Dark server returned an invalid run list.") from exc
+        if json_output:
+            typer.echo(
+                json.dumps(
+                    [row.model_dump(mode="json") for row in records], ensure_ascii=False, indent=2
+                )
+            )
+        elif not records:
+            typer.echo("No uploaded runs yet. Use dark runs upload <run-directory>.")
+        else:
+            for row in records:
+                typer.echo(f"{row.id}  {row.status}  {display_text(row.goal)}")
+    except LoginError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    finally:
+        if client:
+            client.close()
+
+
+@app.command()
+def show(
+    run_id: str = typer.Argument(..., help="Run ID printed by upload or runs list."),
+    server: str | None = typer.Option(None, envvar="DARK_SERVER_URL"),
+    open_report: bool = typer.Option(False, "--open", help="Also open this report on the website."),
+) -> None:
+    """Print a saved run and its exported evidence as JSON."""
+    client = None
+    try:
+        if not re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", run_id):
+            raise LoginError("Invalid run ID. Use an ID returned by dark runs list.")
+        client = AccountClient(server)
+        token = connected_token(client)
+        data = client.require_success(client.request("GET", f"/api/runs/{run_id}", token=token))
+        try:
+            record = SavedRun.model_validate(data)
+        except ValidationError as exc:
+            raise LoginError("Dark server returned an invalid run report.") from exc
+        if record.id != run_id:
+            raise LoginError("Dark server returned an unexpected report ID.")
+        typer.echo(json.dumps(record.model_dump(mode="json"), ensure_ascii=False, indent=2))
+        if open_report:
+            url = f"{client.server}/dashboard/runs/{run_id}"
+            try:
+                if webbrowser.open(url) is False:
+                    typer.echo(f"Could not open the browser. Open {url} manually.", err=True)
+            except (webbrowser.Error, OSError):
+                typer.echo(f"Could not open the browser. Open {url} manually.", err=True)
+    except LoginError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    finally:
+        if client:
+            client.close()
 
 
 def prepare_upload(directory: Path) -> tuple[str, dict]:
@@ -85,7 +184,7 @@ def upload(
     directory: Path = typer.Argument(
         ..., exists=True, file_okay=False, help="A saved .dark/runs/<run> directory."
     ),
-    server: str = typer.Option("http://127.0.0.1:3000", envvar="DARK_SERVER_URL"),
+    server: str | None = typer.Option(None, envvar="DARK_SERVER_URL"),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show the exact export without signing in or uploading."
     ),
@@ -115,8 +214,9 @@ def upload(
         typer.echo(f"Report uploaded: {url}")
         if open_report:
             try:
-                webbrowser.open(url)
-            except webbrowser.Error:
+                if webbrowser.open(url) is False:
+                    typer.echo("Could not open the browser. Use the URL above.")
+            except (webbrowser.Error, OSError):
                 typer.echo("Could not open the browser. Use the URL above.")
     except LoginError as exc:
         typer.echo(str(exc), err=True)

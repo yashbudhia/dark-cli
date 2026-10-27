@@ -195,7 +195,7 @@ def test_exercise_defaults_to_preview_without_connecting(monkeypatch, tmp_path):
     def forbidden(*args, **kwargs):
         raise AssertionError("Preview must not connect to the desktop")
 
-    monkeypatch.setattr("dark_cli.desktop.cli.connect", forbidden)
+    monkeypatch.setattr("dark_cli.desktop.windows.connect", forbidden)
     response = CliRunner().invoke(app, ["desktop", "exercise", str(scenario)])
     assert response.exit_code == 0
     assert json.loads(response.stdout)["executed"] is False

@@ -120,3 +120,52 @@ def test_upload_errors_do_not_open_the_browser(directory, monkeypatch):
     )
     result = CliRunner().invoke(app, ["runs", "upload", str(directory), "--open"])
     assert result.exit_code == 1 and "expired or revoked" in result.output
+
+
+def test_runs_list_show_and_empty_states(monkeypatch):
+    record = {
+        "id": "desktop_test",
+        "target": "Fixture",
+        "goal": "Read Ready",
+        "status": "passed",
+        "kind": "desktop",
+        "desktop_report": {"verified_finding": False},
+    }
+    client_class = runs.AccountClient
+
+    def handler(request):
+        assert request.headers["Authorization"] == "Bearer test-token"
+        return httpx.Response(200, json=[record] if request.url.path == "/api/runs" else record)
+
+    monkeypatch.setattr(
+        runs, "AccountClient", lambda server: client_class(server, httpx.MockTransport(handler))
+    )
+    monkeypatch.setattr(runs.Credentials, "get", lambda self: "test-token")
+    runner = CliRunner()
+    listing = runner.invoke(app, ["runs", "list"])
+    assert listing.exit_code == 0 and "desktop_test" in listing.output
+    listing_json = runner.invoke(app, ["runs", "list", "--json"])
+    assert json.loads(listing_json.output)[0]["id"] == "desktop_test"
+    detail = runner.invoke(app, ["runs", "show", "desktop_test"])
+    assert (
+        detail.exit_code == 0
+        and json.loads(detail.output)["desktop_report"]["verified_finding"] is False
+    )
+    bad_id = runner.invoke(app, ["runs", "show", "../auth/me"])
+    assert bad_id.exit_code == 1 and "Invalid run ID" in bad_id.output
+
+
+@pytest.mark.parametrize("body", [{}, [None], [{"id": "bad/id"}], [{"id": "missing_fields"}]])
+def test_malformed_run_list_is_actionable(monkeypatch, body):
+    client_class = runs.AccountClient
+    monkeypatch.setattr(
+        runs,
+        "AccountClient",
+        lambda server: client_class(
+            server, httpx.MockTransport(lambda request: httpx.Response(200, json=body))
+        ),
+    )
+    monkeypatch.setattr(runs.Credentials, "get", lambda self: "test-token")
+    result = CliRunner().invoke(app, ["runs", "list"])
+    assert result.exit_code == 1
+    assert "invalid" in result.output and "Traceback" not in result.output

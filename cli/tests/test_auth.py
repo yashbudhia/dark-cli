@@ -1,5 +1,4 @@
 import json
-from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -130,18 +129,20 @@ def test_server_requires_https_origin_except_loopback(server):
 @pytest.fixture
 def credential_store(monkeypatch):
     values = {}
-    monkeypatch.setattr(auth.keyring, "get_keyring", lambda: SimpleNamespace(priority=1))
-    monkeypatch.setattr(
-        auth.keyring, "get_password", lambda service, user: values.get((service, user))
-    )
-    monkeypatch.setattr(
-        auth.keyring,
-        "set_password",
-        lambda service, user, token: values.__setitem__((service, user), token),
-    )
-    monkeypatch.setattr(
-        auth.keyring, "delete_password", lambda service, user: values.pop((service, user))
-    )
+    native = type(
+        "TestNativeVault",
+        (),
+        {
+            "__module__": "keyring.backends.Windows",
+            "priority": 1,
+            "get_password": lambda self, service, user: values.get((service, user)),
+            "set_password": lambda self, service, user, token: values.__setitem__(
+                (service, user), token
+            ),
+            "delete_password": lambda self, service, user: values.pop((service, user)),
+        },
+    )()
+    monkeypatch.setattr(auth.keyring, "get_keyring", lambda: native)
     return values
 
 
@@ -199,11 +200,153 @@ def test_keyring_unavailable_fails_without_plaintext_fallback(monkeypatch):
     def unavailable(*args):
         raise NoKeyringError("No keyring")
 
-    monkeypatch.setattr(auth.keyring, "get_password", unavailable)
-    monkeypatch.setattr(auth.keyring, "get_keyring", lambda: SimpleNamespace(priority=1))
+    native = type(
+        "LockedNativeVault",
+        (),
+        {
+            "__module__": "keyring.backends.Windows",
+            "priority": 1,
+            "get_password": unavailable,
+        },
+    )()
+    monkeypatch.setattr(auth.keyring, "get_keyring", lambda: native)
     with pytest.raises(auth.LoginError, match="credential store"):
         auth.Credentials("https://dark.example").get()
     plaintext = type("PlaintextKeyring", (), {"priority": 1, "__module__": "keyrings.alt.file"})()
     monkeypatch.setattr(auth.keyring, "get_keyring", lambda: plaintext)
     with pytest.raises(auth.LoginError, match="keyring"):
         auth.Credentials("https://dark.example").get()
+
+
+@pytest.mark.parametrize("value", [[], None, "not-an-object", 123])
+def test_non_object_json_is_rejected_without_attribute_errors(value):
+    with pytest.raises(auth.LoginError, match="invalid response"):
+        auth.AccountClient.require_success(httpx.Response(200, json=value))
+
+
+@pytest.mark.parametrize(
+    "server",
+    [
+        "https://dark.example:invalid",
+        "https://dark.example:0",
+        "https://dark.example\n",
+        "https://[bad",
+    ],
+)
+def test_malformed_origins_are_login_errors(server):
+    with pytest.raises(auth.LoginError):
+        auth.server_url(server)
+    assert auth.server_url("https://DARK.EXAMPLE:443/") == "https://dark.example"
+
+
+def test_native_backend_is_selected_inside_a_chainer(monkeypatch):
+    native = type("NativeVault", (), {"__module__": "keyring.backends.Windows", "priority": 1})()
+    plaintext = type("Plaintext", (), {"__module__": "keyrings.alt.file", "priority": 10})()
+    chainer = type(
+        "ChainerBackend",
+        (),
+        {"__module__": "keyring.backends.chainer", "backends": [plaintext, native]},
+    )()
+    monkeypatch.setattr(auth.keyring, "get_keyring", lambda: chainer)
+    assert auth.Credentials.backend() is native
+    chainer.backends = [plaintext]
+    with pytest.raises(auth.LoginError, match="native keyring"):
+        auth.Credentials.backend()
+
+
+def test_whoami_handles_missing_account_without_traceback(monkeypatch, credential_store):
+    credential_store[("dark-cli:https://dark.example", "session")] = "session" * 8
+    client_class = auth.AccountClient
+    monkeypatch.setattr(
+        auth,
+        "AccountClient",
+        lambda server: client_class(
+            server, httpx.MockTransport(lambda request: httpx.Response(200, json={"user": None}))
+        ),
+    )
+    result = CliRunner().invoke(app, ["whoami", "--server", "https://dark.example"])
+    assert result.exit_code == 1 and "invalid account" in result.output
+
+
+def test_custom_server_is_remembered_after_successful_login(monkeypatch, credential_store):
+    client_class = auth.AccountClient
+    monkeypatch.setattr(client_class, "login", lambda self, **kwargs: "session" * 8)
+    runner = CliRunner()
+    assert (
+        runner.invoke(
+            app, ["login", "--server", "https://custom.example", "--no-browser"]
+        ).exit_code
+        == 0
+    )
+    client = auth.AccountClient(None)
+    try:
+        assert client.server == "https://custom.example"
+    finally:
+        client.close()
+
+
+def test_cancelled_login_does_not_save_credentials(monkeypatch, credential_store):
+    def cancelled(*args, **kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(auth.AccountClient, "login", cancelled)
+    result = CliRunner().invoke(app, ["login", "--server", "https://dark.example", "--no-browser"])
+    assert result.exit_code == 130 and "cancelled" in result.output
+    assert not credential_store
+
+
+def test_storage_failure_revokes_new_token(monkeypatch, credential_store):
+    client_class = auth.AccountClient
+    revoked = []
+
+    def handler(request):
+        revoked.append(request.url.path)
+        return httpx.Response(204)
+
+    monkeypatch.setattr(
+        auth, "AccountClient", lambda server: client_class(server, httpx.MockTransport(handler))
+    )
+    monkeypatch.setattr(client_class, "login", lambda self, **kwargs: "session" * 8)
+
+    def cannot_save(*args):
+        raise auth.LoginError("Credential storage failed")
+
+    monkeypatch.setattr(auth.Credentials, "set", cannot_save)
+    result = CliRunner().invoke(app, ["login", "--server", "https://dark.example"])
+    assert result.exit_code == 1 and "Credential storage failed" in result.output
+    assert revoked == ["/api/auth/logout"] and not credential_store
+
+
+@pytest.mark.parametrize("ready", [True, False])
+def test_doctor_uses_only_safe_readiness_fields(monkeypatch, ready):
+    client_class = auth.AccountClient
+
+    def handler(request):
+        assert request.url.path == "/api/auth/readiness"
+        assert "Authorization" not in request.headers
+        return httpx.Response(
+            200 if ready else 503,
+            json={
+                "ready": ready,
+                "checks": {
+                    name: ready
+                    for name in (
+                        "database_configured",
+                        "auth_secret_configured",
+                        "email_configured",
+                        "mongodb_reachable",
+                    )
+                },
+                "unsafe-debug": "provider-secret-must-not-print",
+                "email_delivery_verified": True,
+            },
+        )
+
+    monkeypatch.setattr(
+        auth, "AccountClient", lambda server: client_class(server, httpx.MockTransport(handler))
+    )
+    result = CliRunner().invoke(app, ["doctor", "--server", "https://dark.example", "--json"])
+    assert result.exit_code == (0 if ready else 2), result.output
+    data = json.loads(result.output)
+    assert data["ready"] is ready and data["email_delivery_verified"] is False
+    assert "provider-secret" not in result.output
