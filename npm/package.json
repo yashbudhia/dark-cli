@@ -1,0 +1,22 @@
+{
+  "name": "dark-agent-cli",
+  "version": "0.1.0",
+  "description": "Dark CLI: connect your account, inspect Windows apps, and share desktop test reports.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": { "dark": "bin/dark.mjs" },
+  "engines": { "node": ">=20.11" },
+  "files": ["bin/", "lib/", "python/", "scripts/extract.ps1"],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm test && npm run check && npm run build && npm run test:pack",
+    "test": "node --test",
+    "check": "node --check bin/dark.mjs && node --check lib/runtime.mjs && node --check scripts/build.mjs",
+    "test:pack": "node scripts/verify-pack.mjs"
+  },
+  "repository": { "type": "git", "url": "git+https://github.com/yashbudhia/dark-cli.git", "directory": "npm" },
+  "homepage": "https://dark-cli-web.vercel.app",
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org/" },
+  "keywords": ["cli", "windows", "desktop", "agents", "dark"]
+}

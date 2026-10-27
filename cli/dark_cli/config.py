@@ -10,7 +10,7 @@ from pathlib import Path
 import typer
 from dotenv import find_dotenv, load_dotenv
 
-DEFAULT_SERVER = "http://127.0.0.1:3000"
+DEFAULT_SERVER = "https://dark-cli-web.vercel.app"
 
 
 class ConfigError(Exception):

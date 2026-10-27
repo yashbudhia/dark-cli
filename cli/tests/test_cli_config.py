@@ -104,6 +104,11 @@ def test_environment_server_overrides_saved_preference(monkeypatch):
     assert configured_server("https://explicit.example") == "https://explicit.example"
 
 
+def test_fresh_install_uses_hosted_service_and_local_override_still_works():
+    assert configured_server(None) == "https://dark-cli-web.vercel.app"
+    assert configured_server("http://127.0.0.1:3000") == "http://127.0.0.1:3000"
+
+
 def test_account_cli_import_does_not_load_desktop_model_or_mcp_dependencies():
     import subprocess
     import sys

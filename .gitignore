@@ -12,6 +12,9 @@ node_modules/
 frontend/dist/
 .next/
 .vercel/
+npm/python/*.whl
+npm/python/manifest.json
+*.tgz
 frontend/next-env.d.ts
 *.tsbuildinfo
 .playwright-cli/

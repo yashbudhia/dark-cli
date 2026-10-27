@@ -61,6 +61,22 @@ flowchart LR
 
 ## Quickstart
 
+For the npm release, install the client and connect to the hosted service:
+
+```powershell
+npm install -g dark-agent-cli
+dark login
+dark doctor
+```
+
+The npm package bundles the Python client and installs its runtime on first use;
+users need Node.js 20.11+ and do not need a repo checkout or Python installation.
+Windows desktop commands also install their pinned MCP dependency on first use.
+See [npm packaging and release steps](npm/README.md). Until the first npm publish,
+build with `npm pack` in `npm/` and install the generated `.tgz` instead.
+
+To run your own backend and website locally:
+
 ```powershell
 .\scripts\setup-service.ps1 -Dev
 # Fill MongoDB, RESEND_API_KEY and DARK_EMAIL_FROM in the generated root .env.
@@ -80,7 +96,8 @@ Model endpoints are optional for the implemented account/report demo.
 
 Email sign-in, MongoDB storage and browser-approved CLI pairing are implemented.
 Configure the backend credentials in [docs/AUTH.md](docs/AUTH.md), then open
-`http://127.0.0.1:3000/login` and run `dark login` to connect your terminal.
+`http://127.0.0.1:3000/login` and run `dark login --server http://127.0.0.1:3000`
+to connect your terminal to the local service. Plain `dark login` uses the hosted site.
 
 ```powershell
 dark whoami

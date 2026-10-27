@@ -93,7 +93,7 @@ if needed; the default backend URL needs no override.
 The installed CLI discovers `.env` from its working directory and parent
 directories. `DARK_ENV_FILE` selects an explicit file. Server selection is
 `--server`, then `DARK_SERVER_URL`, then the server remembered after login, then
-`http://127.0.0.1:3000`. An explicitly configured environment URL overrides the
+`https://dark-cli-web.vercel.app`. An explicitly configured environment URL overrides the
 remembered preference; change or clear it when switching websites. The non-secret
 server preference lives in the per-user Dark config directory; `DARK_CONFIG_DIR`
 can override that location. Tokens remain in the native OS credential store.
@@ -103,7 +103,7 @@ the MongoDB or email-provider service credentials.
 Open `/login`, enter your email, and verify its eight-digit code. Then:
 
 ```powershell
-.\.venv\Scripts\dark.exe login
+.\.venv\Scripts\dark.exe login --server http://127.0.0.1:3000
 .\.venv\Scripts\dark.exe doctor
 .\.venv\Scripts\dark.exe whoami
 .\.venv\Scripts\dark.exe logout
