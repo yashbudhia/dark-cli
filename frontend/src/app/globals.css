@@ -1045,7 +1045,6 @@ ul {
 .final-cta { padding-bottom: 96px; }
 .final-cta-copy { max-width: 540px; }
 .final-cta-copy p { line-height: 1.5; }
-.final-cta-copy .command-sample { align-self: stretch; }
 .final-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .final-cta-copy .final-actions .button { margin-top: 0; }
 .final-terminal { width: 100%; max-width: 760px; }
@@ -1083,3 +1082,15 @@ ul {
   .use-case-copy, .faq-item[open] p { animation: none; }
   .brand-mark { transition: none; }
 }
+
+.install { margin: 28px 0 24px; max-width: 720px; }
+.install-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; background: rgba(8, 13, 10, .82); border: 1px solid var(--border); border-radius: 4px; backdrop-filter: blur(6px); }
+.install-line code { font: 13px/1.6 var(--code); color: #eef4ef; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
+.install-line code span { color: var(--accent); }
+.install-copy { flex-shrink: 0; font: 12px var(--code); color: var(--accent); background: transparent; border: 1px solid currentColor; border-radius: 3px; padding: 6px 12px; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.install-copy:hover { background: var(--accent); color: #04110a; }
+.install-note { font-size: 12px; line-height: 1.6; color: var(--muted); margin: 10px 0 0; }
+.install-note code { font-family: var(--code); color: #eef4ef; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 560px) { .install-line { flex-direction: column; align-items: stretch; } .install-copy { align-self: flex-end; } }
+@media (prefers-reduced-motion: reduce) { .install-copy { transition: none; } }

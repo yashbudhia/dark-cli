@@ -6,9 +6,10 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
     <header className="account-header">
       <Link href="/" className="account-brand" aria-label="Dark home">
         <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
-          <rect width="64" height="64" rx="11" fill="#080d0a" />
-          <path d="M26 11H11v15M38 11h15v15M53 38v15H38M26 53H11V38" fill="none" stroke="#eef4ef" strokeWidth="6" strokeLinecap="square" />
-          <path d="M18 32h28M32 25v14" fill="none" stroke="#00ff88" strokeWidth="5" strokeLinecap="square" />
+          <defs><mask id="account-moon"><rect width="64" height="64" fill="#fff" /><circle cx="39" cy="25" r="17" fill="#000" /></mask></defs>
+          <rect width="64" height="64" rx="14" fill="#080d0a" />
+          <circle cx="29" cy="35" r="20" fill="#eef4ef" mask="url(#account-moon)" />
+          <path d="M38 38 48 16" stroke="#00ff88" strokeWidth="5.5" strokeLinecap="square" fill="none" />
         </svg>dark<span>/</span>
       </Link>
       <nav className="account-header-nav">

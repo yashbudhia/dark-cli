@@ -9,6 +9,7 @@ import {
   eventRecords, exerciseApply, exercisePreview, help, negativeScenario, probe, runDirectory, snapshotControls,
 } from "./cli-captures";
 import { Icon, type IconName } from "./icon";
+import { InstallCommand } from "./install-command";
 import { MotionText, useLandingMotion } from "./landing-motion";
 import { Terminal, TerminalBody, TerminalFrame, at, timeline, useReplay } from "./terminal";
 
@@ -314,7 +315,7 @@ function FAQ() {
 function Footer() {
   return <footer className="footer section"><div className="footer-brand"><Brand /><p>Inspect software you are authorized to test.<br />Keep the evidence close.</p></div>
     <div className="footer-links"><div><h3>Explore</h3>{navItems.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}</div>
-      <div><h3>Project</h3><a href={guide} target="_blank" rel="noreferrer">Install from npm</a><a href={`${guide}#configuration`} target="_blank" rel="noreferrer">CLI configuration</a></div></div>
+      <div><h3>Project</h3><a href={guide} target="_blank" rel="noreferrer">npm package</a><a href={`${guide}#configuration`} target="_blank" rel="noreferrer">CLI configuration</a></div></div>
   </footer>;
 }
 
@@ -326,6 +327,7 @@ export function DarkLanding() {
         <div className="hero-copy"><span className="hero-eyebrow">WINDOWS / DESKTOP TESTING</span>
           <h1><MotionText text="Test the behavior." /><br className="desktop-break" /> <MotionText text="Keep the proof." /></h1>
           <p><MotionText text="Dark inspects native Windows apps, runs explicit test scenarios, and saves the evidence you need to investigate a failure." /></p>
+          <InstallCommand />
           <Button href="/login" arrow>Get started with Dark</Button>
         </div>
         <HeroStage />
@@ -336,7 +338,7 @@ export function DarkLanding() {
       <section className="final-cta"><div className="final-cta-copy"><span className="section-label">[ START HERE ]</span>
         <h2><MotionText text="Find the behavior. Save the evidence." /></h2>
         <p>Install the CLI, set up the desktop adapter, and run your first probe against an app you are authorized to test.</p>
-        <code className="command-sample">PS&gt; npm install -g dark-agent-cli</code>
+        <InstallCommand />
         <div className="final-actions"><Button arrow>Read the setup guide</Button><Button href="/login" secondary>Sign in</Button></div>
       </div><div className="final-terminal">
         <Terminal lines={help} wide label="Terminal: dark --help lists the commands doctor, login, whoami, logout, scan, ctf, desktop and runs." />
