@@ -25,6 +25,8 @@ load native Windows tools for inspecting and controlling applications.
 ❯ /update
 ```
 
+Sign in with `/login` before sending a task; chat and `dark run` validate your Dark
+session before calling the model. A model key by itself does not sign you in.
 Use `/provider` to configure an OpenAI-compatible endpoint and model key. Keys are
 stored in the native OS credential store. `DARK_API_KEY`, `DARK_BASE_URL` and
 `DARK_MODEL` in a local `.env` are also supported; Refuseless is the default

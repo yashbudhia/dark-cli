@@ -322,3 +322,41 @@ async def test_fast_model_retains_supported_vision_model(tmp_path):
     )
     await agent.describe_image("data:image/png;base64,abc", "describe")
     assert create.call_args.kwargs["model"] == DEFAULT_MODEL
+
+
+@pytest.mark.asyncio
+async def test_configured_model_key_does_not_bypass_account_login(tmp_path, monkeypatch):
+    from dark_cli import chat
+
+    monkeypatch.setattr(chat.Credentials, "get", lambda _: None)
+    instance = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "test", "test-key"))
+    instance.agent.turn = AsyncMock()
+    assert await instance.execute("hi") is False
+    instance.agent.turn.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [200, 401])
+async def test_chat_requires_a_server_validated_session(tmp_path, monkeypatch, status):
+    import httpx
+
+    from dark_cli import chat
+
+    monkeypatch.setattr(chat.Credentials, "get", lambda _: "test-session-token")
+    real = chat.AccountClient
+    monkeypatch.setattr(
+        chat,
+        "AccountClient",
+        lambda server: real(
+            server,
+            httpx.MockTransport(
+                lambda request: httpx.Response(
+                    status, json={"user": {"email": "test@example.com"}}
+                ),
+            ),
+        ),
+    )
+    instance = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "test", "test-key"))
+    instance.agent.turn = AsyncMock()
+    assert await instance.execute("hi") is (status == 200)
+    assert instance.agent.turn.await_count == int(status == 200)

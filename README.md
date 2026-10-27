@@ -78,7 +78,7 @@ For local release testing, build with `npm pack` in `npm/` and install the gener
 `.tgz`. See [npm packaging and release steps](npm/README.md).
 
 In chat, `/help` lists commands, `/provider` connects a model, `/login` connects
-your report account, and `/update` updates the global npm install and restarts.
+your Dark account (required before agent tasks), and `/update` updates the global npm install and restarts.
 Model calls currently use your provider key; website credits do not pay for them.
 For one task, use `dark run "your task"`. Ctrl+C cancels an active task and returns
 to the prompt. Use `dark update` to update from the shell.

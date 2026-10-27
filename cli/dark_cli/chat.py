@@ -27,6 +27,8 @@ from rich.text import Text
 
 from . import __version__
 from .agent import BUILTINS, DEFAULT_BASE, DEFAULT_MODEL, Agent, AgentError, ModelConfig, clean
+from .auth import AccountClient, Credentials, LoginError, account_email, server_url
+from .config import configured_server
 
 ACCENT = "#00ff88"
 COMMANDS = {
@@ -58,7 +60,7 @@ class SlashCompleter(Completer):
 
 
 def error_text(exc: Exception) -> str:
-    if isinstance(exc, AgentError):
+    if isinstance(exc, (AgentError, LoginError)):
         return clean(str(exc))
     from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
 
@@ -128,6 +130,7 @@ class Chat:
                 "dim",
             ),
             "\n\nType a task. Dark will inspect, act, and check the result.\n",
+            ("Dark account required · /login to connect\n", "dim"),
             ("/help", ACCENT),
             (" commands  ·  alt+enter newline  ·  ctrl+c stop  ·  ctrl+d exit", "dim"),
         )
@@ -335,8 +338,13 @@ class Chat:
 
     async def execute(self, prompt: str) -> bool:
         started = time.monotonic()
+
+        async def authorized_turn():
+            await asyncio.to_thread(self.require_account)
+            await self.agent.turn(prompt)
+
         try:
-            await self.interruptible(self.agent.turn(prompt))
+            await self.interruptible(authorized_turn())
             self.console.print(
                 Text(
                     f"─ {self.agent.steps} tool calls · {time.monotonic() - started:.1f}s\n",
@@ -356,6 +364,21 @@ class Chat:
         finally:
             self.event("response_end", None)
         return False
+
+    def require_account(self):
+        server = server_url(configured_server(None))
+        token = Credentials(server).get()
+        if not token:
+            raise LoginError(
+                "Sign in with /login before sending a task. A configured model key does not sign you into Dark."
+            )
+        client = AccountClient(server)
+        try:
+            account_email(
+                client.require_success(client.request("GET", "/api/auth/me", token=token))
+            )
+        finally:
+            client.close()
 
     async def run(self, prompt: str | None = None) -> bool:
         if prompt is not None:
