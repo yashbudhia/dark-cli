@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Path, Request
 from fastapi.responses import JSONResponse
 from pymongo import MongoClient
@@ -12,11 +11,9 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from .auth import AuthError, AuthService
 from .auth_routes import Principal, Service, router
-from .email import CloudflareMailer
+from .email import make_mailer
 from .models import DesktopReport, Finding, RefusalEvent, Run, RunStatus
 from .settings import Settings
-
-load_dotenv()
 
 
 def create_app(
@@ -41,7 +38,7 @@ def create_app(
                 )
                 db = client[config.mongo_database]
             if db is not None and len(config.auth_secret) >= 32:
-                auth = AuthService(db, config, mailer or CloudflareMailer(config))
+                auth = AuthService(db, config, mailer or make_mailer(config))
                 auth.indexes()
                 application.state.auth = auth
             yield

@@ -5,8 +5,10 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlsplit
 
+from dotenv import dotenv_values, find_dotenv
 from email_validator import EmailNotValidError, validate_email
 
 
@@ -19,11 +21,19 @@ class Settings:
     cloudflare_account_id: str = ""
     cloudflare_api_token: str = ""
     email_from: str = ""
+    resend_api_key: str = ""
+    email_provider: str = ""
 
     @classmethod
-    def from_env(cls) -> Settings:
+    def from_env(cls, env_file: str | Path | None = None) -> Settings:
+        path = str(env_file) if env_file is not None else find_dotenv(usecwd=True)
+        file_values = dotenv_values(path, encoding="utf-8-sig") if path else {}
+        # Configuration belongs to this Settings object, never the importing process.
+        values = {**file_values, **os.environ}
+
         def value(name: str, default: str = "") -> str:
-            return os.getenv(name, default).strip()
+            configured = values.get(name, default)
+            return configured.strip() if configured is not None else default
 
         return cls(
             mongo_uri=value("MONGODB_URI"),
@@ -33,6 +43,8 @@ class Settings:
             cloudflare_account_id=value("CLOUDFLARE_ACCOUNT_ID"),
             cloudflare_api_token=value("CLOUDFLARE_API_TOKEN"),
             email_from=value("DARK_EMAIL_FROM"),
+            resend_api_key=value("RESEND_API_KEY"),
+            email_provider=value("DARK_EMAIL_PROVIDER").lower(),
         )
 
     @property
@@ -45,11 +57,21 @@ class Settings:
 
     @property
     def email_configured(self) -> bool:
+        if self.selected_email_provider == "resend":
+            return bool(self.resend_api_key and self.email_from)
         return all(
             (self.cloudflare_account_id, self.cloudflare_api_token, self.email_from)
         )
 
+    @property
+    def selected_email_provider(self) -> str:
+        return self.email_provider or (
+            "resend" if self.resend_api_key else "cloudflare"
+        )
+
     def validate(self) -> None:
+        if self.email_provider not in ("", "resend", "cloudflare"):
+            raise ValueError("DARK_EMAIL_PROVIDER must be resend or cloudflare")
         try:
             url = urlsplit(self.web_url)
             port = url.port

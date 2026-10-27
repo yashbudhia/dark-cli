@@ -1,8 +1,8 @@
 # Email accounts and CLI pairing
 
 Dark uses MongoDB for users, one-time email challenges, sessions, pairing requests,
-rate limits and user-owned run records. Cloudflare delivers sign-in codes through
-its Email Sending REST API. The first successful email verification creates an
+rate limits and user-owned run records. Resend delivers sign-in codes through
+its email REST API; Cloudflare remains an optional provider. The first successful email verification creates an
 account; later verifications sign in to the same account.
 
 Email sign-in is passwordless authentication. CLI connection is a first-party,
@@ -21,9 +21,12 @@ generate its auth secret without overwriting existing credentials. Set:
 | `MONGODB_DATABASE` | Database name; defaults to `dark` |
 | `DARK_AUTH_SECRET` | Random secret of at least 32 characters; keep stable across restarts |
 | `DARK_WEB_URL` | Exact website origin, with no trailing slash, e.g. `https://dark.example` |
-| `CLOUDFLARE_ACCOUNT_ID` | Account with Email Sending enabled |
-| `CLOUDFLARE_API_TOKEN` | Account-scoped token with Email Sending edit permission |
-| `DARK_EMAIL_FROM` | Sender email on the domain onboarded for Email Sending |
+| `DARK_EMAIL_PROVIDER` | `resend` or `cloudflare`; inferred from a Resend key when unset |
+| `RESEND_API_KEY` | Resend API key authorized to send from the configured domain |
+| `DARK_EMAIL_FROM` | Sender email on a verified sending domain |
+
+For `DARK_EMAIL_PROVIDER=cloudflare`, configure `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_API_TOKEN` instead of `RESEND_API_KEY`.
 
 If configuring a hosted environment without the setup script, generate a secret with:
 
@@ -42,7 +45,14 @@ or unreachable storage returns HTTP 503. Email delivery is explicitly unverified
 until a real code arrives. `dark doctor` exits 2 for a not-ready service and 1 for
 connection/protocol errors.
 
-Cloudflare's [Email Service](https://developers.cloudflare.com/email-service/)
+Resend uses the [Send Email API](https://resend.com/docs/api-reference/emails/send-email).
+Verify a sending domain, authorize the key for that domain, and configure
+`DARK_EMAIL_FROM` explicitly. There is no hardcoded production sender. For a safe
+provider test, use Resend's [test recipients](https://resend.com/docs/dashboard/emails/send-test-emails),
+such as `delivered+dark-demo@resend.dev`. These simulate delivery events and count
+against the account's sending quota.
+
+For the optional Cloudflare provider, [Email Service](https://developers.cloudflare.com/email-service/)
 supports outbound transactional email through the
 [REST API](https://developers.cloudflare.com/api/resources/email_sending/methods/send/).
 Sending to arbitrary recipients requires Workers Paid and Email Sending Beta
@@ -88,7 +98,7 @@ remembered preference; change or clear it when switching websites. The non-secre
 server preference lives in the per-user Dark config directory; `DARK_CONFIG_DIR`
 can override that location. Tokens remain in the native OS credential store.
 Clients on other computers need only the website URL and their own login, not
-the MongoDB or Cloudflare service credentials.
+the MongoDB or email-provider service credentials.
 
 Open `/login`, enter your email, and verify its eight-digit code. Then:
 
@@ -179,6 +189,6 @@ the ASGI peer address, which Uvicorn can populate from trusted proxy headers.
 ```
 
 Automated auth tests use mongomock and a captured mail adapter, and cover the
-Cloudflare HTTP contract with mocked responses. Actual MongoDB connectivity and
+email-provider HTTP contracts with mocked responses. Actual MongoDB connectivity and
 email delivery must be verified after credentials are supplied. No test email is
 sent by the automated suite.

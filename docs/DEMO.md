@@ -2,7 +2,7 @@
 
 The implemented demo connects a terminal to an email account, uploads a saved
 desktop test report and displays its assertions in the workspace. It uses MongoDB
-for persistence and Cloudflare Email Sending for sign-in codes. Autonomous
+for persistence and Resend for sign-in codes. Autonomous
 computer-use planning remains a separate increment.
 
 ## Prepare once
@@ -22,17 +22,14 @@ Fill these values in the root `.env`:
 
 ```dotenv
 MONGODB_URI=
-CLOUDFLARE_ACCOUNT_ID=
-CLOUDFLARE_API_TOKEN=
+RESEND_API_KEY=
 DARK_EMAIL_FROM=
 ```
 
 Keep `DARK_AUTH_SECRET` stable. For a local demo, keep the website origin
-`DARK_WEB_URL=http://127.0.0.1:3000`. Cloudflare needs a sender domain onboarded
-for Email Sending and a token with Email Sending edit permission. Arbitrary
-recipients require Workers Paid and Email Sending Beta access; Email Routing
-alone can send only to destinations already verified in the account. Provider
-configuration details are in [AUTH.md](AUTH.md).
+`DARK_WEB_URL=http://127.0.0.1:3000`. Resend needs a verified sending domain and
+an API key authorized for that domain. Provider configuration details, including
+the optional Cloudflare adapter, are in [AUTH.md](AUTH.md).
 
 ## Start the service
 

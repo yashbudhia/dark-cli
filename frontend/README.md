@@ -7,7 +7,7 @@ locally saved evidence.
 Account pages are available at `/login`, `/connect`, `/dashboard`, and
 `/dashboard/runs/<id>`. Sign-in uses email codes; the workspace lists connected
 computers and uploaded desktop reports. See [account setup](../docs/AUTH.md)
-for MongoDB and Cloudflare email configuration. The landing page's sign-in and
+for MongoDB and Resend email configuration. The landing page's sign-in and
 Get started links lead to `/login`; the setup guide remains in the footer.
 
 ```powershell

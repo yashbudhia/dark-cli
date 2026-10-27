@@ -196,11 +196,13 @@ def test_invalid_configuration_names_fields_without_echoing_secrets(values, fiel
     assert field in str(failure.value) and "private-" not in str(failure.value)
 
 
-def test_environment_values_are_trimmed(monkeypatch):
+def test_environment_values_are_trimmed(monkeypatch, tmp_path):
     monkeypatch.setenv("MONGODB_URI", " mongodb://127.0.0.1:27017 \n")
     monkeypatch.setenv("DARK_AUTH_SECRET", " " + "test-secret-" * 4 + " ")
     monkeypatch.setenv("DARK_WEB_URL", " http://127.0.0.1:3000/ ")
-    config = Settings.from_env()
+    env_file = tmp_path / ".env"
+    env_file.write_text("", encoding="utf-8")
+    config = Settings.from_env(env_file)
     config.validate()
     assert config.mongo_uri == "mongodb://127.0.0.1:27017"
     assert config.auth_secret == "test-secret-" * 4

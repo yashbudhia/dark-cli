@@ -2,7 +2,7 @@
 
 Dark connects your terminal to an account, inspects authorized Windows apps,
 runs explicit test scenarios, and saves reports with expected versus observed text.
-The account and report service uses MongoDB, Cloudflare email codes, and a Next.js
+The account and report service uses MongoDB, Resend email codes, and a Next.js
 workspace. Model-guided scanning and CTF solving remain planned work.
 
 ## Implemented demo
@@ -63,7 +63,7 @@ flowchart LR
 
 ```powershell
 .\scripts\setup-service.ps1 -Dev
-# Fill MongoDB and Cloudflare values in the generated root .env.
+# Fill MongoDB, RESEND_API_KEY and DARK_EMAIL_FROM in the generated root .env.
 .\scripts\start-service.ps1
 # http://127.0.0.1:3000
 ```

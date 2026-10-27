@@ -22,11 +22,13 @@ ROOT = Path(__file__).resolve().parent.parent
 REQUIRED = (
     "MONGODB_URI",
     "DARK_AUTH_SECRET",
-    "CLOUDFLARE_ACCOUNT_ID",
-    "CLOUDFLARE_API_TOKEN",
     "DARK_EMAIL_FROM",
 )
 SERVER_ONLY = frozenset(REQUIRED) | {
+    "RESEND_API_KEY",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_API_TOKEN",
+    "DARK_EMAIL_PROVIDER",
     "MONGODB_DATABASE",
     "DARK_API_KEY",
     "TYPESAFE_API_KEY",
@@ -64,7 +66,20 @@ def environment(path: Path) -> dict[str, str]:
 
 
 def missing_config(values: dict[str, str]) -> list[str]:
-    return [key for key in REQUIRED if not values.get(key, "").strip()]
+    provider = values.get("DARK_EMAIL_PROVIDER", "").strip().lower()
+    if provider not in ("", "resend", "cloudflare"):
+        raise ValueError("DARK_EMAIL_PROVIDER must be resend or cloudflare")
+    provider = provider or (
+        "resend" if values.get("RESEND_API_KEY", "").strip() else "cloudflare"
+    )
+    provider_keys = (
+        ("RESEND_API_KEY",)
+        if provider == "resend"
+        else ("CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN")
+    )
+    return [
+        key for key in (*REQUIRED, *provider_keys) if not values.get(key, "").strip()
+    ]
 
 
 def local_origin(value: str, port: int) -> str:
