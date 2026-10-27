@@ -1,12 +1,13 @@
 {
   "name": "dark-agent-cli",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Dark: an interactive terminal agent with slash commands, coding tools, and Windows computer control.",
-  "license": "UNLICENSED",
+  "license": "MIT",
+  "contentPolicy": { "class": "dual-use" },
   "type": "module",
   "bin": { "dark": "bin/dark.mjs" },
   "engines": { "node": ">=20.11" },
-  "files": ["bin/", "lib/", "python/", "scripts/extract.ps1"],
+  "files": ["bin/", "lib/", "python/", "scripts/extract.ps1", "DISCLOSURE"],
   "scripts": {
     "build": "node scripts/build.mjs",
     "prepack": "npm run build",

@@ -63,7 +63,7 @@ function Navigation() {
   return <header className={`site-header${scrolled || open ? " is-scrolled" : ""}`}>
     <nav className="nav-inner" aria-label="Main navigation">
       <Brand />
-      <div className="desktop-nav">{navItems.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}</div>
+      <div className="desktop-nav">{navItems.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}<Link href="/docs">Docs</Link></div>
       <Link className="nav-cta" href="/login">Sign in <Icon name="arrow" /></Link>
       <button ref={menuButton} className="menu-button" aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open} aria-controls="mobile-nav" onClick={() => setOpen(!open)}>
@@ -72,6 +72,7 @@ function Navigation() {
     </nav>
     {open && <nav id="mobile-nav" className="mobile-nav" aria-label="Mobile navigation">
       {navItems.map(([label, id]) => <a href={`#${id}`} key={id} onClick={() => setOpen(false)}>{label}<Icon name="arrow" /></a>)}
+      <Link href="/docs" onClick={() => setOpen(false)}>Docs<Icon name="arrow" /></Link>
       <Link href="/login">Sign in<Icon name="arrow" /></Link>
     </nav>}
   </header>;
@@ -253,7 +254,7 @@ function UseCases() {
       <div className="use-case-copy" key={`copy-${active}`}><div><h3>{item.title}</h3><p>{item.description}</p></div>
         <code className="command-sample">PS&gt; {item.command}</code>
         <ul className="check-list">{item.checks.map(check => <li key={check}><Icon name="check" />{check}</li>)}</ul>
-        <Button href={guide} arrow>Read the desktop guide</Button>
+        <Button href="/docs#desktop" arrow>Read the desktop guide</Button>
       </div><CaseVisual key={`visual-${active}`} immediate={interacted}>{item.visual}</CaseVisual>
     </div></div>
   </section>;
@@ -315,7 +316,7 @@ function FAQ() {
 function Footer() {
   return <footer className="footer section"><div className="footer-brand"><Brand /><p>Inspect software you are authorized to test.<br />Keep the evidence close.</p></div>
     <div className="footer-links"><div><h3>Explore</h3>{navItems.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}</div>
-      <div><h3>Project</h3><a href={guide} target="_blank" rel="noreferrer">npm package</a><a href={`${guide}#configuration`} target="_blank" rel="noreferrer">CLI configuration</a></div></div>
+      <div><h3>Project</h3><Link href="/docs">Documentation</Link><Link href="/docs#configuration">CLI configuration</Link><a href="https://github.com/yashbudhia/dark-cli" target="_blank" rel="noreferrer">Source on GitHub</a><a href={guide} target="_blank" rel="noreferrer">npm package</a></div></div>
   </footer>;
 }
 
@@ -339,7 +340,7 @@ export function DarkLanding() {
         <h2><MotionText text="Find the behavior. Save the evidence." /></h2>
         <p>Install the CLI, set up the desktop adapter, and run your first probe against an app you are authorized to test.</p>
         <InstallCommand />
-        <div className="final-actions"><Button arrow>Read the setup guide</Button><Button href="/login" secondary>Sign in</Button></div>
+        <div className="final-actions"><Button href="/docs#install" arrow>Read the setup guide</Button><Button href="/login" secondary>Sign in</Button></div>
       </div><div className="final-terminal">
         <Terminal lines={help} wide label="Terminal: dark --help lists the commands doctor, login, whoami, logout, scan, ctf, desktop and runs." />
       </div></section>

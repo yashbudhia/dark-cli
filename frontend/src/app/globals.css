@@ -157,8 +157,8 @@ ul {
   inset: 0;
   z-index: 20;
   pointer-events: none;
-  background-image: url("/dark/noise.png");
-  background-size: 153.5px auto;
+  background-image: repeating-radial-gradient(circle at 17% 29%, #fff 0, transparent 1px, transparent 3px);
+  background-size: 7px 11px;
   background-position: center top;
   opacity: 0.13;
 }
@@ -338,7 +338,7 @@ ul {
   height: 75%;
   z-index: 0;
   pointer-events: none;
-  background: url("/dark/bands-fallback.png") center/cover no-repeat;
+  background: repeating-linear-gradient(110deg, #080808 0 7%, #0a2b1d 9%, #080808 12%);
   mask-image: linear-gradient(17deg, transparent 44%, #000 100%);
 }
 .bands-background canvas {
@@ -838,7 +838,6 @@ ul {
   }
   .bands-background {
     height: 75%;
-    background-image: url("/dark/bands-mobile-fallback.png");
   }
   .section {
     padding: 80px 16px;

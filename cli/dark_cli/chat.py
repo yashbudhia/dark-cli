@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import importlib
 import json
 import os
 import shlex
 import signal
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -19,7 +22,6 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 from rich.console import Console
 from rich.live import Live
-from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.spinner import Spinner
 from rich.table import Table
@@ -31,6 +33,12 @@ from .auth import AccountClient, Credentials, LoginError, account_email, server_
 from .config import configured_server
 
 ACCENT = "#00ff88"
+# The mascot in the terminal: a face in nerd glasses beside a blinking cursor.
+FACES = {
+    "thinking": ["◕‿◕", "◕‿◕", "◔‿◔", "◔‿◔", "◕‿◕", "◕‿◕", "-‿-", "◕‿◕"],
+    "looking": ["◉_◉", "◉_◉", "◎_◎", "◎_◎"],
+    "working": ["◕‿◕", "◕‿◕", "◕‿◕", "◕‿◕", "◕‿◕", "-‿-"],
+}
 COMMANDS = {
     "/help": "Show commands and keyboard shortcuts",
     "/login": "Connect your Dark account in the browser",
@@ -59,10 +67,47 @@ class SlashCompleter(Completer):
                     yield Completion(name, start_position=-len(prefix), display_meta=description)
 
 
+def background(function, *args) -> asyncio.Future:
+    """Run a blocking call in a daemon thread, which never delays closing Dark."""
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+
+    def settle(succeeded, value):
+        if not future.done():
+            (future.set_result if succeeded else future.set_exception)(value)
+
+    def run():
+        try:
+            succeeded, value = True, function(*args)
+        except BaseException as exc:
+            succeeded, value = False, exc
+        try:
+            loop.call_soon_threadsafe(settle, succeeded, value)
+        except RuntimeError:
+            pass  # Dark closed first.
+
+    threading.Thread(target=run, daemon=True).start()
+    return future
+
+
+def mascot(mood: str, text: str) -> Spinner:
+    spinner = Spinner("dots", text=text, style=ACCENT)
+    spinner.frames = [
+        f"[{face}]{'▌' if index % 2 == 0 else ' '}" for index, face in enumerate(FACES[mood])
+    ]
+    spinner.interval = 180
+    return spinner
+
+
+def preload(*modules: str) -> None:
+    for module in modules:
+        importlib.import_module(module)
+
+
 def error_text(exc: Exception) -> str:
     if isinstance(exc, (AgentError, LoginError)):
         return clean(str(exc))
-    from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
+    from .model import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
 
     if isinstance(exc, AuthenticationError):
         return "The model rejected the API key. Update it with /provider."
@@ -90,6 +135,7 @@ class Chat:
         self.live: Live | None = None
         self.text = ""
         self.started = 0.0
+        self.preparing: asyncio.Future | None = None
         bindings = KeyBindings()
 
         @bindings.add("escape", "enter")
@@ -118,7 +164,9 @@ class Chat:
         self.agent = Agent(self.config, self.root, event=self.event, ask=self.ask)
 
     def banner(self):
-        title = Text.assemble(("dark", f"bold {ACCENT}"), (f" / {__version__}", "dim"))
+        title = Text.assemble(
+            ("dark", f"bold {ACCENT}"), (f" / {__version__} ", "dim"), ("[◕‿◕]", ACCENT)
+        )
         content = Text.assemble(
             (clean(str(self.root)), "dim"),
             "\n",
@@ -147,7 +195,8 @@ class Chat:
             line = sys.stdin.readline()
             if not line:
                 raise EOFError
-            return line.rstrip("\n")
+            # PowerShell starts piped text with a byte order mark.
+            return line.rstrip("\n").lstrip("\ufeff")
         if password:
             return await PromptSession(history=DummyHistory()).prompt_async(label, is_password=True)
         if label != "❯ ":
@@ -168,17 +217,21 @@ class Chat:
             self.text = ""
             if self.terminal:
                 self.live = Live(
-                    Spinner("dots", text="Thinking…", style=ACCENT),
+                    mascot("thinking", "Thinking…"),
                     console=self.console,
                     transient=True,
                     refresh_per_second=12,
                 )
                 self.live.start()
         elif kind == "text":
+            from rich.markdown import Markdown
+
             self.text = value
             if self.live:
                 self.live.update(Markdown(value))
         elif kind == "response_end":
+            from rich.markdown import Markdown
+
             if self.live:
                 self.live.stop()
                 self.live = None
@@ -202,7 +255,22 @@ class Chat:
                     ("  " + clean(str(summary))[:180], "dim"),
                 )
             )
+            if self.terminal and name.startswith("desktop__"):
+                looking = name == "desktop__screenshot_control"
+                self.live = Live(
+                    mascot(
+                        "looking" if looking else "working",
+                        "Looking at the screen…" if looking else "Controlling the desktop…",
+                    ),
+                    console=self.console,
+                    transient=True,
+                    refresh_per_second=12,
+                )
+                self.live.start()
         elif kind == "tool_end":
+            if self.live:
+                self.live.stop()
+                self.live = None
             error = value.get("error") or value.get("exit_code", 0)
             output = (
                 value.get("output")
@@ -295,7 +363,7 @@ class Chat:
                 )
             self.console.print(
                 Text(
-                    "Windows tools load on demand and keep one connection alive during a task.",
+                    "Windows tools load on demand and keep one connection alive until Dark closes.",
                     style="dim",
                 )
             )
@@ -340,7 +408,11 @@ class Chat:
         started = time.monotonic()
 
         async def authorized_turn():
-            await asyncio.to_thread(self.require_account)
+            preparing, self.preparing = self.preparing, None
+            if preparing is not None:
+                # wait() lets Ctrl+C stop this task without cancelling the preparation.
+                await asyncio.wait({preparing})
+            await background(self.require_account)
             await self.agent.turn(prompt)
 
         try:
@@ -365,6 +437,16 @@ class Chat:
             self.event("response_end", None)
         return False
 
+    async def prepare(self):
+        """Preload imports without contacting a provider before account validation."""
+        # Imports run off the event loop so the prompt stays responsive.
+        with contextlib.suppress(Exception):
+            await background(preload, "dark_cli.model", "rich.markdown")
+        await asyncio.gather(
+            *([background(preload, "mcp.client.stdio")] if os.name == "nt" else []),
+            return_exceptions=True,
+        )
+
     def require_account(self):
         server = server_url(configured_server(None))
         token = Credentials(server).get()
@@ -381,6 +463,8 @@ class Chat:
             client.close()
 
     async def run(self, prompt: str | None = None) -> bool:
+        if prompt is not None or self.terminal:
+            self.preparing = asyncio.create_task(self.prepare())
         if prompt is not None:
             return await self.execute(prompt)
         self.banner()

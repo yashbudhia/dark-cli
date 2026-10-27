@@ -1,0 +1,19 @@
+Dark is a local terminal and Windows desktop automation agent for software development
+and testing on systems the user owns or is authorized to operate.
+
+The agent can execute model-requested shell commands, read and write workspace files,
+inspect native accessibility controls, capture screenshots, and send input to Windows
+applications through a Windows MCP server. It is not a sandbox. The user explicitly
+launches it; no install-time lifecycle script performs computer control.
+
+First launch downloads a pinned, checksum-verified uv runtime and Python dependencies.
+Windows automation downloads a pinned, checksum-verified Windows MCP server. The CLI
+connects to the user's configured model endpoint and Dark account service. Prompts,
+tool results and requested screenshots are sent to the configured model provider;
+report-summary uploads are explicit. Credentials use the operating system keyring.
+
+The desktop overlay is a visible, non-interactive indicator of automation and does
+not capture input. There is no hidden persistence, credential harvesting, or remote
+control listener. Only operate on authorized targets.
+
+Source and private vulnerability reporting: https://github.com/yashbudhia/dark-cli

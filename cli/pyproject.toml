@@ -1,13 +1,13 @@
 [project]
 name = "dark-cli"
-version = "0.2.1"
+version = "0.3.0"
+license = "MIT"
 description = "AI red-teaming CLI for authorized security testing — verified, replayable findings"
 requires-python = ">=3.11"
 dependencies = [
   "typer>=0.12",
   "rich>=13.7",
   "prompt-toolkit>=3.0.52,<4",
-  "openai>=1.40",
   "python-dotenv>=1.0",
   "mcp>=1.13,<2",
   "httpx>=0.28,<1",

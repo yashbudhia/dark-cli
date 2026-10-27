@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 from pathlib import Path
 
-import typer
 from dotenv import find_dotenv, load_dotenv
 
 DEFAULT_SERVER = "https://dark-cli-web.vercel.app"
@@ -32,11 +32,18 @@ def load_environment() -> None:
         raise ConfigError("Cannot read the CLI environment file.") from exc
 
 
+def app_directory() -> Path:
+    """The folder click.get_app_dir chooses, without importing Typer for the chat."""
+    if os.name == "nt":
+        return Path(os.environ.get("APPDATA") or Path.home()) / "dark-cli"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "dark-cli"
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "dark-cli"
+
+
 def settings_path() -> Path:
     directory = os.getenv("DARK_CONFIG_DIR")
-    return (
-        Path(directory).expanduser() if directory else Path(typer.get_app_dir("dark-cli"))
-    ) / "config.json"
+    return (Path(directory).expanduser() if directory else app_directory()) / "config.json"
 
 
 def configured_server(explicit: str | None) -> str:

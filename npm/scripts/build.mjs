@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
+await writeFile(join(root, "npm", "LICENSE"), await readFile(join(root, "LICENSE")));
 const payload = join(root, "npm", "python");
 await mkdir(payload, { recursive: true });
 for (const name of await readdir(payload)) {

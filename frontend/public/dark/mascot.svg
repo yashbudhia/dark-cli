@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="mascot-title">
+  <title id="mascot-title">Dark's mascot: a little moon in nerd glasses, typing in a terminal next to its coffee</title>
+  <style>
+    .bob { animation: bob 3.2s ease-in-out infinite; }
+    .ground { transform-box: fill-box; transform-origin: center; animation: ground 3.2s ease-in-out infinite; }
+    .eye { transform-box: fill-box; transform-origin: center; animation: blink 5s infinite; }
+    .glint { transform: translateX(-60px); animation: glint 6s ease-in-out infinite; }
+    .tip { animation: cursor 1.1s steps(1) infinite; }
+    .line { transform-box: fill-box; transform-origin: left; }
+    .l1 { animation: type-1 6s steps(8) infinite; }
+    .l2 { animation: type-2 6s steps(10) infinite; }
+    .l3 { animation: type-3 6s steps(6) infinite; }
+    .caret { animation: caret 6s steps(1) infinite; }
+    .paw-left { animation: tap-left 6s ease-in-out infinite; }
+    .paw-right { animation: tap-right 6s ease-in-out infinite; }
+    .steam { opacity: 0; animation: steam 3s ease-out infinite; }
+    .steam-late { animation-delay: 1.5s; }
+    .glyph { opacity: 0; animation: float 6s ease-out infinite; }
+    .glyph-late { animation-delay: 3s; }
+    .star { animation: twinkle 3s ease-in-out infinite; }
+
+    @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    @keyframes ground { 0%, 100% { transform: scaleX(1); opacity: 1; } 50% { transform: scaleX(.86); opacity: .6; } }
+    @keyframes blink { 0%, 90%, 96%, 100% { transform: scaleY(1); } 93% { transform: scaleY(.12); } }
+    @keyframes glint { 0%, 55% { transform: translateX(-60px); } 72%, 100% { transform: translateX(110px); } }
+    @keyframes cursor { 0% { opacity: 1; } 50% { opacity: .25; } }
+    @keyframes type-1 { 0% { transform: scaleX(0); } 15%, 88% { transform: scaleX(1); } 92%, 100% { transform: scaleX(0); } }
+    @keyframes type-2 { 0%, 18% { transform: scaleX(0); } 35%, 88% { transform: scaleX(1); } 92%, 100% { transform: scaleX(0); } }
+    @keyframes type-3 { 0%, 38% { transform: scaleX(0); } 55%, 88% { transform: scaleX(1); } 92%, 100% { transform: scaleX(0); } }
+    @keyframes caret { 0%, 55%, 65%, 75%, 85% { opacity: 0; } 60%, 70%, 80% { opacity: 1; } }
+    /* The paws take turns tapping while the lines type out, then rest. */
+    @keyframes tap-left {
+      0%, 5%, 10%, 15%, 20%, 25%, 30%, 35%, 40%, 45%, 50%, 55%, 100% { transform: translateY(0); }
+      2.5%, 12.5%, 22.5%, 32.5%, 42.5%, 52.5% { transform: translateY(3px); }
+    }
+    @keyframes tap-right {
+      0%, 5%, 10%, 15%, 20%, 25%, 30%, 35%, 40%, 45%, 50%, 55%, 100% { transform: translateY(0); }
+      7.5%, 17.5%, 27.5%, 37.5%, 47.5% { transform: translateY(3px); }
+    }
+    @keyframes steam { 0% { opacity: 0; transform: translateY(4px); } 40% { opacity: .55; } 100% { opacity: 0; transform: translateY(-10px); } }
+    @keyframes float { 0% { opacity: 0; transform: translateY(6px); } 15%, 40% { opacity: .9; } 60%, 100% { opacity: 0; transform: translateY(-16px); } }
+    @keyframes twinkle { 0%, 100% { opacity: .25; } 50% { opacity: .9; } }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; }
+      .glyph { opacity: .9; }
+    }
+  </style>
+  <defs>
+    <radialGradient id="halo" cx="50%" cy="46%" r="50%">
+      <stop offset="0" stop-color="#00ff88" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#00ff88" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="body"><circle cx="128" cy="118" r="64"/></clipPath>
+    <clipPath id="lenses"><circle cx="106" cy="112" r="17"/><circle cx="152" cy="112" r="17"/></clipPath>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="#080d0a"/>
+  <circle cx="128" cy="124" r="104" fill="url(#halo)"/>
+
+  <g fill="#eef4ef">
+    <circle class="star" cx="34" cy="42" r="1.6"/>
+    <circle class="star" cx="64" cy="22" r="1.1" style="animation-delay: -1s"/>
+    <circle class="star" cx="104" cy="26" r="1.2" style="animation-delay: -2.2s"/>
+    <circle class="star" cx="186" cy="20" r="1" style="animation-delay: -.6s"/>
+    <circle class="star" cx="216" cy="38" r="1.5" style="animation-delay: -1.7s"/>
+    <circle class="star" cx="230" cy="96" r="1" style="animation-delay: -2.6s"/>
+    <circle class="star" cx="24" cy="122" r="1.2" style="animation-delay: -1.3s"/>
+    <circle class="star" cx="36" cy="196" r="1" style="animation-delay: -.3s"/>
+  </g>
+
+  <g font-family="'JetBrains Mono', Consolas, Menlo, monospace" font-weight="700" fill="#00ff88">
+    <text class="glyph" x="186" y="76" font-size="14">&lt;/&gt;</text>
+    <text class="glyph glyph-late" x="38" y="84" font-size="14">{ }</text>
+  </g>
+
+  <ellipse class="ground" cx="128" cy="240" rx="64" ry="6" fill="#00ff88" fill-opacity=".14"/>
+
+  <!-- Coffee stays on the desk while the moon bobs. -->
+  <g>
+    <path class="steam" d="M203 198c-4-4 4-7 0-12" fill="none" stroke="#eef4ef" stroke-width="2.4" stroke-linecap="round"/>
+    <path class="steam steam-late" d="M212 197c-4-4 4-7 0-12" fill="none" stroke="#eef4ef" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M220 213c9 0 9 13 0 13" fill="none" stroke="#cfdcd2" stroke-width="4"/>
+    <rect x="194" y="205" width="27" height="28" rx="6" fill="#eef4ef"/>
+    <text x="207.5" y="225" text-anchor="middle" font-family="Georgia, serif" font-size="14" font-weight="700" fill="#00a85a">λ</text>
+  </g>
+
+  <g class="bob">
+    <!-- The antenna is the slash from "dark/", tipped with a blinking cursor. -->
+    <path d="M134 57 150 27" stroke="#00ff88" stroke-width="6" stroke-linecap="square"/>
+    <rect class="tip" x="146" y="11" width="11" height="13" rx="2" fill="#00ff88" filter="url(#glow)"/>
+
+    <circle cx="128" cy="118" r="64" fill="#c8d5cb"/>
+    <circle cx="117" cy="110" r="62" fill="#eef4ef" clip-path="url(#body)"/>
+    <g fill="#dce6de">
+      <circle cx="86" cy="80" r="5"/>
+      <circle cx="166" cy="72" r="2.6"/>
+      <circle cx="74" cy="104" r="2.2"/>
+    </g>
+    <circle cx="184" cy="128" r="4" fill="#b9c8bd"/>
+
+    <g stroke="#101914" stroke-linecap="round" fill="none">
+      <path d="M86 109 70 104M172 109 188 104" stroke-width="5"/>
+      <path d="M125 110q3-6 6 0" stroke-width="5"/>
+    </g>
+    <g fill="#e2f8ec" fill-opacity=".7" stroke="#101914" stroke-width="6">
+      <circle cx="106" cy="112" r="20"/>
+      <circle cx="152" cy="112" r="20"/>
+    </g>
+    <g class="eye">
+      <ellipse cx="106" cy="114" rx="7" ry="9" fill="#101914"/>
+      <circle cx="109" cy="109" r="2.8" fill="#fff"/>
+      <circle cx="103" cy="119" r="1.3" fill="#fff"/>
+    </g>
+    <g class="eye">
+      <ellipse cx="152" cy="114" rx="7" ry="9" fill="#101914"/>
+      <circle cx="155" cy="109" r="2.8" fill="#fff"/>
+      <circle cx="149" cy="119" r="1.3" fill="#fff"/>
+    </g>
+    <g clip-path="url(#lenses)">
+      <g transform="skewX(-24)">
+        <rect class="glint" x="130" y="88" width="9" height="50" fill="#fff" opacity=".8"/>
+      </g>
+    </g>
+
+    <ellipse cx="89" cy="139" rx="10" ry="6" fill="#ff8fab" opacity=".55"/>
+    <ellipse cx="169" cy="139" rx="10" ry="6" fill="#ff8fab" opacity=".55"/>
+    <path d="M120 137q4 6 8 0q4 6 8 0" fill="none" stroke="#101914" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <g>
+      <rect x="70" y="152" width="116" height="74" rx="12" fill="#0c1510" stroke="#00ff88" stroke-width="3"/>
+      <circle cx="83" cy="162" r="2.6" fill="#ff6b5b"/>
+      <circle cx="92" cy="162" r="2.6" fill="#ffcc4d"/>
+      <circle cx="101" cy="162" r="2.6" fill="#00ff88"/>
+      <text x="80" y="185" font-family="'JetBrains Mono', Consolas, Menlo, monospace" font-size="12" font-weight="700" fill="#00ff88">›</text>
+      <rect class="line l1" x="92" y="177" width="58" height="6" rx="3" fill="#00ff88"/>
+      <rect class="line l2" x="80" y="191" width="80" height="6" rx="3" fill="#eef4ef" opacity=".8"/>
+      <rect class="line l3" x="80" y="205" width="46" height="6" rx="3" fill="#66736a"/>
+      <rect class="caret" x="131" y="202" width="7" height="11" rx="1" fill="#00ff88"/>
+    </g>
+    <ellipse class="paw-left" cx="98" cy="153" rx="10" ry="7" fill="#eef4ef" stroke="#c8d5cb" stroke-width="2"/>
+    <ellipse class="paw-right" cx="158" cy="153" rx="10" ry="7" fill="#eef4ef" stroke="#c8d5cb" stroke-width="2"/>
+  </g>
+</svg>

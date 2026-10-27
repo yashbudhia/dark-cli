@@ -19,11 +19,18 @@ const UV_TARGETS = {
   "darwin-arm64": ["aarch64-apple-darwin.tar.gz", "60fbd5c8a1ed681845eea28d9d622fcde03c51e91a43465b64a1e17db1ed3472"],
   "linux-x64": ["x86_64-unknown-linux-gnu.tar.gz", "f29c3e94ffabd7e6f3ba521dba169a9b7ec12100bf3257087f0f24f6123f3645"],
   "linux-arm64": ["aarch64-unknown-linux-gnu.tar.gz", "229e194255c7958d86d56e8790d969a6f74736592133f0dfd0076f754c642c1d"],
+  "linux-x64-musl": ["x86_64-unknown-linux-musl.tar.gz", "5d61f26b6c7213779eda90edc6971ea6b0b796bfb8d49a574c8ad69b59838548"],
+  "linux-arm64-musl": ["aarch64-unknown-linux-musl.tar.gz", "819692e404d23e5aae6bc44c0e260f1f5492fd1910ab4693b2c650f926dbe800"],
 };
 
-export function target(platform = process.platform, arch = process.arch) {
-  const entry = UV_TARGETS[`${platform}-${arch}`];
-  if (!entry) throw new Error(`Unsupported platform: ${platform}/${arch}. Use Windows, macOS or glibc Linux on x64/arm64.`);
+// glibc builds of Node report the C library version they run on; musl builds (Alpine) do not.
+export function libc(platform = process.platform, report = () => process.report?.getReport()) {
+  return platform === "linux" && !report()?.header?.glibcVersionRuntime ? "musl" : "";
+}
+
+export function target(platform = process.platform, arch = process.arch, variant = "") {
+  const entry = UV_TARGETS[[platform, arch, variant].filter(Boolean).join("-")];
+  if (!entry) throw new Error(`Unsupported platform: ${platform}/${arch}. Use Windows, macOS or Linux on x64/arm64.`);
   const [suffix, sha256] = entry;
   return { asset: `uv-${suffix}`, sha256, folder: `uv-${suffix.replace(/\.(zip|tar\.gz)$/, "")}` };
 }
@@ -97,8 +104,12 @@ async function archive(url, sha256, destination, executable) {
     await pipeline(Readable.fromWeb(response.body), createWriteStream(download));
     verifyDigest(await readFile(download), sha256);
     if (url.endsWith(".zip")) {
-      const powershell = join(process.env.SystemRoot || process.env.WINDIR || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-      await checked(powershell, ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", join(PACKAGE, "scripts", "extract.ps1"), "-Archive", download, "-Destination", temporary]);
+      const system = join(process.env.SystemRoot || process.env.WINDIR || "C:\\Windows", "System32");
+      // Windows 10 1803+ includes tar, which extracts zips far faster than PowerShell.
+      const extracted = await run(join(system, "tar.exe"), ["-xf", download, "-C", temporary]).catch(() => 1);
+      if (extracted !== 0) {
+        await checked(join(system, "WindowsPowerShell", "v1.0", "powershell.exe"), ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", join(PACKAGE, "scripts", "extract.ps1"), "-Archive", download, "-Destination", temporary]);
+      }
     } else {
       await checked("tar", ["-xzf", download, "-C", temporary]);
     }
@@ -112,7 +123,7 @@ async function archive(url, sha256, destination, executable) {
 }
 
 export async function ensureRuntime(root = cacheDirectory()) {
-  const platform = target();
+  target();
   const payload = join(PACKAGE, "python");
   const manifest = JSON.parse(await readFile(join(payload, "manifest.json"), "utf8"));
   if (!/^dark_cli-[0-9][A-Za-z0-9_.-]*\.whl$/.test(manifest.wheel)) throw new Error("Invalid packaged CLI wheel.");
@@ -128,10 +139,12 @@ export async function ensureRuntime(root = cacheDirectory()) {
   return withLock(join(root, "setup.lock"), async () => {
     if (await exists(marker) && await exists(python)) return python;
     console.error("Dark: preparing the CLI runtime (first run only)…");
+    const variant = libc();
+    const build = target(process.platform, process.arch, variant);
     const uv = await archive(
-      `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${platform.asset}`,
-      platform.sha256, join(root, `uv-${UV_VERSION}-${process.platform}-${process.arch}`),
-      process.platform === "win32" ? "uv.exe" : `${platform.folder}/uv`,
+      `https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${build.asset}`,
+      build.sha256, join(root, ["uv", UV_VERSION, process.platform, process.arch, variant].filter(Boolean).join("-")),
+      process.platform === "win32" ? "uv.exe" : `${build.folder}/uv`,
     );
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^(UV_|PYTHONPATH$|PYTHONHOME$|VIRTUAL_ENV$)/i.test(key)));
     Object.assign(env, {
@@ -143,8 +156,9 @@ export async function ensureRuntime(root = cacheDirectory()) {
       UV_DEFAULT_INDEX: "https://pypi.org/simple",
     });
     await checked(uv, ["--quiet", "venv", "--clear", "--python", "3.12", environment], env);
-    await checked(uv, ["--quiet", "pip", "sync", "--python", python, "--require-hashes", "--only-binary", ":all:", requirements], env);
-    await checked(uv, ["--quiet", "pip", "install", "--python", python, "--no-deps", wheel], env);
+    // Compiling bytecode now keeps the first launch as fast as later ones.
+    await checked(uv, ["--quiet", "pip", "sync", "--python", python, "--require-hashes", "--only-binary", ":all:", "--compile-bytecode", requirements], env);
+    await checked(uv, ["--quiet", "pip", "install", "--python", python, "--no-deps", "--compile-bytecode", wheel], env);
     await writeFile(marker, manifest.wheelSha256);
     return python;
   });
@@ -154,6 +168,8 @@ async function ensureDesktop(root) {
   if (process.platform !== "win32" || process.arch !== "x64") {
     throw new Error("Automatic desktop setup supports Windows x64. Other Windows architectures need DARK_WINDOWS_MCP_PATH.");
   }
+  const server = join(root, "windows-mcp-1.3.28", "Sbroenne.WindowsMcp.exe");
+  if (await exists(server)) return server;
   return withLock(join(root, "desktop.lock"), () => archive(
     "https://github.com/sbroenne/mcp-windows/releases/download/v1.3.28/windows-mcp-server-1.3.28-win-x64.zip",
     "9ca69685222d3c4934680218b4a2b3b7ae5bd0c8d2ce8bc2220925f4bd924fe4",

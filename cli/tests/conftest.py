@@ -8,3 +8,5 @@ def isolate_cli_preferences(monkeypatch, tmp_path):
     empty_environment = tmp_path / "test.env"
     empty_environment.write_text("")
     monkeypatch.setenv("DARK_ENV_FILE", str(empty_environment))
+    # Tests drive fake desktops; never open the on-screen overlay.
+    monkeypatch.setenv("DARK_NO_OVERLAY", "1")

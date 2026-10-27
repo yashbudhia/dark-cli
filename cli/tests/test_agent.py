@@ -1,6 +1,6 @@
 import asyncio
 import json
-from contextlib import AsyncExitStack
+import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -54,6 +54,13 @@ def fake_client(*streams):
     return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
 
 
+def test_native_store_key_is_redacted_without_an_environment_variable(tmp_path):
+    config = ModelConfig("https://model.example/v1", "test", "native-only-credential")
+    agent = Agent(config, tmp_path)
+    assert agent.clean("provider echoed native-only-credential") == "provider echoed [redacted]"
+    assert "native-only-credential" not in repr(config)
+
+
 @pytest.mark.asyncio
 async def test_streamed_tool_arguments_execute_and_observations_return_to_model(tmp_path):
     events = []
@@ -104,10 +111,9 @@ async def test_bad_arguments_and_unknown_tools_cannot_modify_files(tmp_path):
 @pytest.mark.asyncio
 async def test_file_tools_reject_parent_paths_and_credentials(tmp_path):
     agent = Agent(ModelConfig("https://model.example/v1", "test", "test-key"), tmp_path)
-    async with AsyncExitStack() as stack:
-        for path in ("../outside.txt", ".env", ".git/config"):
-            with pytest.raises(AgentError):
-                await agent.tool("write_file", {"path": path, "content": "bad"}, stack)
+    for path in ("../outside.txt", ".env", ".git/config"):
+        with pytest.raises(AgentError):
+            await agent.tool("write_file", {"path": path, "content": "bad"})
     assert not (tmp_path.parent / "outside.txt").exists()
 
 
@@ -242,10 +248,7 @@ async def test_image_tool_sends_image_and_question_to_vision_model(tmp_path):
     agent = Agent(
         ModelConfig("https://model.example/v1", "vision-test", "test-key"), tmp_path, client=client
     )
-    async with AsyncExitStack() as stack:
-        result = await agent.tool(
-            "view_image", {"path": "fixture.png", "question": "What quantity?"}, stack
-        )
+    result = await agent.tool("view_image", {"path": "fixture.png", "question": "What quantity?"})
     assert result["description"] == "Quantity is -2"
     content = create.call_args.kwargs["messages"][0]["content"]
     assert "What quantity?" in content[0]["text"]
@@ -254,7 +257,7 @@ async def test_image_tool_sends_image_and_question_to_vision_model(tmp_path):
 
 @pytest.mark.asyncio
 async def test_model_connection_is_reused_until_chat_closes(tmp_path, monkeypatch):
-    import openai
+    from dark_cli import model
 
     client = fake_client([chunk("First answer")], [chunk("Second answer")])
     client.close = AsyncMock()
@@ -264,7 +267,7 @@ async def test_model_connection_is_reused_until_chat_closes(tmp_path, monkeypatc
         created.append(kwargs)
         return client
 
-    monkeypatch.setattr(openai, "AsyncOpenAI", factory)
+    monkeypatch.setattr(model, "ModelClient", factory)
     agent = Agent(ModelConfig("https://model.example/v1", "test", "test-key"), tmp_path)
     await agent.turn("first")
     await agent.turn("second")
@@ -274,7 +277,7 @@ async def test_model_connection_is_reused_until_chat_closes(tmp_path, monkeypatc
     client.close.assert_awaited_once()
 
 
-def test_chat_startup_does_not_import_model_sdk():
+def test_chat_startup_defers_network_and_desktop_libraries():
     import subprocess
     import sys
 
@@ -282,7 +285,8 @@ def test_chat_startup_does_not_import_model_sdk():
         [
             sys.executable,
             "-c",
-            "import sys; import dark_cli.chat; assert 'openai' not in sys.modules",
+            "import sys; import dark_cli.chat; "
+            "assert not {'openai', 'httpx', 'mcp'} & set(sys.modules), sorted(sys.modules)",
         ],
         capture_output=True,
         timeout=15,
@@ -360,3 +364,131 @@ async def test_chat_requires_a_server_validated_session(tmp_path, monkeypatch, s
     instance.agent.turn = AsyncMock()
     assert await instance.execute("hi") is (status == 200)
     assert instance.agent.turn.await_count == int(status == 200)
+
+
+@pytest.mark.asyncio
+async def test_revoked_session_blocks_the_next_task(tmp_path, monkeypatch):
+    import httpx
+
+    from dark_cli import chat
+
+    checks = []
+    monkeypatch.setattr(chat.Credentials, "get", lambda _: "test-session-token")
+    real = chat.AccountClient
+
+    def respond(request):
+        checks.append(request.url.path)
+        return httpx.Response(
+            200 if len(checks) == 1 else 401,
+            json={"user": {"email": "test@example.com"}},
+        )
+
+    monkeypatch.setattr(
+        chat, "AccountClient", lambda server: real(server, httpx.MockTransport(respond))
+    )
+    instance = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "test", "test-key"))
+    instance.agent.turn = AsyncMock()
+    assert await instance.execute("first")
+    assert not await instance.execute("second")
+    assert len(checks) == 2
+    assert instance.agent.turn.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_preparation_never_contacts_the_model_before_login(tmp_path, monkeypatch):
+    from dark_cli import chat
+
+    monkeypatch.setattr(chat.Credentials, "get", lambda _: None)
+    instance = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "test", "test-key"))
+    await instance.prepare()
+    assert instance.agent.client is None
+
+
+@pytest.mark.asyncio
+async def test_desktop_server_stays_connected_across_turns_until_chat_closes(tmp_path, monkeypatch):
+    from contextlib import asynccontextmanager
+
+    from dark_cli.desktop import windows
+
+    lifecycle = []
+    session = SimpleNamespace(
+        list_tools=AsyncMock(
+            return_value=SimpleNamespace(
+                tools=[SimpleNamespace(name="ui_click", description="Click", inputSchema={})]
+            )
+        ),
+        call_tool=AsyncMock(
+            return_value=SimpleNamespace(
+                content=[SimpleNamespace(type="text", text="clicked")], isError=False
+            )
+        ),
+    )
+
+    @asynccontextmanager
+    async def connect(**_):
+        lifecycle.append("open")
+        try:
+            yield SimpleNamespace(session=session)
+        finally:
+            lifecycle.append("close")
+
+    monkeypatch.setattr(windows, "connect", connect)
+    click = [chunk(call=call_fragment("desktop__ui_click", "{}", "click"))]
+    client = fake_client(click, [chunk("Clicked")], click, [chunk("Clicked again")], [chunk("Hi")])
+    agent = Agent(
+        ModelConfig("https://model.example/v1", "test", "test-key"), tmp_path, client=client
+    )
+    await agent.turn("click save")
+    await agent.turn("click save again")
+    assert lifecycle == ["open"]
+    assert session.call_tool.await_count == 2
+    assert agent.desktop_schemas, "consecutive desktop turns keep the schemas loaded"
+    await agent.turn("say hi")
+    assert agent.desktop_schemas == [] and lifecycle == ["open"]
+    await agent.close()
+    assert lifecycle == ["open", "close"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.name != "nt", reason="the overlay is Windows-only")
+async def test_overlay_frames_the_window_points_at_controls_and_scans_on_screenshots(
+    tmp_path, monkeypatch
+):
+    monkeypatch.delenv("DARK_NO_OVERLAY")
+    written = []
+    stdin = SimpleNamespace(write=written.append, drain=AsyncMock(), close=lambda: None)
+    agent = Agent(ModelConfig("https://model.example/v1", "test", "test-key"), tmp_path)
+    agent.overlay = SimpleNamespace(returncode=None, stdin=stdin)
+    agent.remember_points(
+        [json.dumps({"items": [{"id": "save-id", "name": "Save", "click": [1115, 751, 0]}]})]
+    )
+    await agent.show_on_screen("ui_click", {"windowHandle": "42", "elementId": "save-id"})
+    await agent.show_on_screen("ui_read", {"windowHandle": "42", "elementId": "save-id"})
+    await agent.show_on_screen("screenshot_control", {"windowHandle": "42"})
+    commands = [json.loads(line) for line in written]
+    assert commands == [
+        {"window": "42"},
+        {"point": [1115, 751]},
+        {"window": "42"},
+        {"window": "42"},
+        {"scan": True},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_stopping_the_first_task_leaves_startup_preparation_running(tmp_path):
+    from dark_cli import chat
+
+    instance = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "test", "test-key"))
+    instance.require_account = lambda: None
+    instance.agent.turn = AsyncMock()
+    release = asyncio.Event()
+    preparing = asyncio.create_task(release.wait())
+    instance.preparing = preparing
+    first = asyncio.create_task(instance.execute("first"))
+    await asyncio.sleep(0.05)
+    first.cancel()
+    assert await first is False
+    assert not preparing.cancelled()
+    assert await instance.execute("second") is True
+    release.set()

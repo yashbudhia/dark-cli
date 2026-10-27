@@ -51,19 +51,27 @@ Secret Service/KWallet keyring; Windows and macOS use their native stores.
 On first use, the launcher downloads a pinned, SHA-256-verified uv runtime, installs
 Python 3.12 privately, and installs the bundled Dark CLI wheel with hash-locked
 dependencies. No existing Python, uv, Git checkout, or PyPI publication is needed.
-Internet access is required for first-run setup. Later commands reuse that runtime.
-The model SDK loads on the first task, and model connections are reused between
-turns. Login keeps retrying temporary connection failures without discarding a
+Internet access is required for first-run setup. Later commands reuse that runtime,
+and setup precompiles it so the first launch is as fast as later ones. While you
+type your first task, Dark checks your account and opens the model connection; the
+account check is then reused for five minutes and the connection for the session.
+The Windows desktop server starts on first use and stays connected until Dark
+closes. Login keeps retrying temporary connection failures without discarding a
 browser approval.
 `/fast` selects Refuseless's lower-latency DeepSeek model for tasks; screenshot
 analysis retains the vision model. `/model` lets you choose a different model.
 The npm install itself needs no lifecycle scripts and also works with `--ignore-scripts`.
 
-Account/report commands support Windows, macOS, and glibc Linux on x64/arm64.
+Account/report commands support Windows, macOS, and Linux (glibc or musl, such as
+Alpine) on x64/arm64.
 Windows desktop commands automatically install the pinned, SHA-256-verified
 [Windows MCP server](https://github.com/sbroenne/mcp-windows) on Windows x64.
 Other Windows architectures need `DARK_WINDOWS_MCP_PATH`; macOS/Linux desktop
-control is not implemented.
+control is not implemented. While the agent controls a Windows app, a green glow
+frames that window, a ghost cursor glides to each control it clicks or types
+into, and a scan line sweeps the window whenever it looks at the screen. The
+overlay is click-through, never takes focus, and is excluded from screenshots, so
+it cannot affect the agent. Set `DARK_NO_OVERLAY=1` to turn it off.
 
 ```sh
 dark desktop doctor

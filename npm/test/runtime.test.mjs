@@ -4,12 +4,21 @@ import { mkdtemp, readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { cacheDirectory, target, verifyDigest, withLock } from "../lib/runtime.mjs";
+import { cacheDirectory, libc, target, verifyDigest, withLock } from "../lib/runtime.mjs";
 
 test("platform selection rejects unsupported architectures before downloads", () => {
   assert.match(target("win32", "x64").asset, /windows-msvc.zip$/);
   assert.match(target("darwin", "arm64").asset, /apple-darwin.tar.gz$/);
   assert.throws(() => target("linux", "ia32"), /Unsupported platform/);
+});
+
+test("Linux on musl (Alpine) gets a static uv build; glibc and other systems are unchanged", () => {
+  assert.equal(libc("linux", () => ({ header: { glibcVersionRuntime: "2.36" } })), "");
+  assert.equal(libc("linux", () => ({ header: {} })), "musl");
+  assert.equal(libc("darwin", () => ({ header: {} })), "");
+  assert.match(target("linux", "x64", "musl").asset, /x86_64-unknown-linux-musl.tar.gz$/);
+  assert.match(target("linux", "arm64", "musl").asset, /aarch64-unknown-linux-musl.tar.gz$/);
+  assert.match(target("linux", "x64").asset, /linux-gnu.tar.gz$/);
 });
 
 test("corrupt downloads cannot execute", () => {

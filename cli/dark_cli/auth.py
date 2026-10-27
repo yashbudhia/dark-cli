@@ -7,15 +7,18 @@ import re
 import socket
 import time
 import webbrowser
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlsplit
 
-import httpx
 import keyring
-import typer
 from keyring.errors import KeyringError
 
 from . import ui
 from .config import ConfigError, configured_server, remember_server
+
+if TYPE_CHECKING:
+    import httpx
+    import typer
 
 
 class LoginError(Exception):
@@ -27,6 +30,8 @@ class ConnectionInterrupted(LoginError):
 
 
 def server_url(value: str) -> str:
+    import httpx
+
     try:
         if any(ord(character) < 33 or ord(character) == 127 for character in value):
             raise ValueError("Control character in origin")
@@ -117,6 +122,8 @@ class AccountClient:
             self.server = server_url(configured_server(server))
         except ConfigError as exc:
             raise LoginError(str(exc)) from exc
+        import httpx
+
         self.http = httpx.Client(
             base_url=self.server,
             timeout=httpx.Timeout(30, connect=10),
@@ -130,6 +137,8 @@ class AccountClient:
     def request(
         self, method: str, path: str, *, token: str | None = None, **kwargs
     ) -> httpx.Response:
+        import httpx
+
         try:
             return self.http.request(
                 method,
@@ -166,11 +175,15 @@ class AccountClient:
         self,
         *,
         open_browser=webbrowser.open,
-        notify=typer.echo,
+        notify=None,
         sleep=time.sleep,
         clock=time.monotonic,
         no_browser=False,
     ) -> str:
+        if notify is None:
+            import typer
+
+            notify = typer.echo
         pairing = self.require_success(
             self.request(
                 "POST",
@@ -276,6 +289,8 @@ def retry_after(response: httpx.Response, default: int) -> int:
 
 
 def register(app: typer.Typer) -> None:
+    import typer
+
     @app.command()
     def doctor(
         server: str | None = typer.Option(None, envvar="DARK_SERVER_URL"),

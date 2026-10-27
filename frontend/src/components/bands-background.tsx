@@ -105,7 +105,7 @@ export function BandsBackground() {
 
     async function start() {
       try {
-        const response = await fetch("/dark/shaders/bands.frag", {
+        const response = await fetch("/dark/shaders/ribbons.frag", {
           signal: controller.signal,
         });
         if (!response.ok) throw new Error("Shader source unavailable");

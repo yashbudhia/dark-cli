@@ -1,5 +1,8 @@
 # dark-cli
 
+[Website](https://dark-cli-web.vercel.app) · [Documentation](https://dark-cli-web.vercel.app/docs) ·
+[npm](https://www.npmjs.com/package/dark-agent-cli) · [MIT license](LICENSE) · [Security and privacy](SECURITY.md)
+
 Dark connects your terminal to an account, inspects authorized Windows apps,
 runs explicit test scenarios, and saves reports with expected versus observed text.
 Running `dark` opens an interactive agent: type a task, watch it use file, terminal
