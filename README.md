@@ -1,8 +1,29 @@
 # dark-cli
 
-An AI red-teaming CLI that finds — and proves — security bugs in software you're authorized to test. Abliterated models power the attack side where mainstream models add refusal friction to legitimate security work.
+Dark connects your terminal to an account, inspects authorized Windows apps,
+runs explicit test scenarios, and saves reports with expected versus observed text.
+The account and report service uses MongoDB, Cloudflare email codes, and a Next.js
+workspace. Model-guided scanning and CTF solving remain planned work.
 
-## What it does
+## Implemented demo
+
+```powershell
+dark doctor
+dark login
+dark whoami
+dark runs upload .dark\runs\<run-directory> --dry-run
+dark runs upload .dark\runs\<run-directory> --open
+dark runs list
+dark logout
+```
+
+Native desktop probes and explicit scenarios produce local evidence without
+requiring an account. Report upload is explicit. See [the demo walkthrough](docs/DEMO.md).
+
+## Planned scanning workflow
+
+The following natural-language pipeline is scaffolded, and its commands exit with
+a not-implemented status until the model-guided operator is ready.
 
 ```
 dark scan http://localhost:3000 --goal "Test the archive workflow"
@@ -19,9 +40,9 @@ A finding only counts once it reproduces.
 
 | Folder | Stack | Purpose |
 |---|---|---|
-| `cli/` | Python + Typer | The `dark` command: scan, ctf, report |
-| `backend/` | FastAPI | Stores runs, findings, refusal telemetry; serves the dashboard |
-| `frontend/` | Next.js + React + TypeScript | Dark product landing page |
+| `cli/` | Python + Typer | Account login, diagnostics, desktop checks, report upload/list/show |
+| `backend/` | FastAPI + MongoDB | Email accounts, sessions, pairing and owner-scoped reports |
+| `frontend/` | Next.js + React + TypeScript | Landing page, sign-in and account/report workspace |
 
 ```mermaid
 flowchart LR
@@ -40,18 +61,20 @@ flowchart LR
 
 ## Quickstart
 
-```bash
-# CLI
-cd cli && pip install -e . && dark --help
-
-# Backend
-cd backend && pip install -e . && uvicorn app.main:app --reload
-
-# Frontend
-cd frontend && npm install && npm run dev   # http://127.0.0.1:3000
+```powershell
+.\scripts\setup-service.ps1 -Dev
+# Fill MongoDB and Cloudflare values in the generated root .env.
+.\scripts\start-service.ps1
+# http://127.0.0.1:3000
 ```
 
-Model endpoints are configured via `.env` (see `.env.example`).
+The auth secret is generated once and preserved. Ctrl+C stops the API and website.
+Use `-Production` for a production build, or run `scripts/verify-service.ps1` for
+automated verification. Full setup and acceptance steps: [docs/DEMO.md](docs/DEMO.md).
+
+Install only the terminal client with `uv tool install ./cli` if the service is
+hosted elsewhere, then use `dark login --server https://your-website.example`.
+Model endpoints are optional for the implemented account/report demo.
 
 ## Accounts and saved reports
 
@@ -63,6 +86,8 @@ Configure the backend credentials in [docs/AUTH.md](docs/AUTH.md), then open
 dark whoami
 dark runs upload .dark\runs\<run-directory> --dry-run
 dark runs upload .dark\runs\<run-directory> --open
+dark runs list
+dark runs show <run-id>
 dark logout
 ```
 

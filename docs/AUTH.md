@@ -12,7 +12,8 @@ tokens. No external identity provider is required.
 
 ## Credentials to supply later
 
-Copy `.env.example` to the repository-root `.env` and set:
+Run `scripts/setup-service.ps1 -Dev` to initialize the ignored root `.env` and
+generate its auth secret without overwriting existing credentials. Set:
 
 | Variable | Value |
 | --- | --- |
@@ -24,7 +25,7 @@ Copy `.env.example` to the repository-root `.env` and set:
 | `CLOUDFLARE_API_TOKEN` | Account-scoped token with Email Sending edit permission |
 | `DARK_EMAIL_FROM` | Sender email on the domain onboarded for Email Sending |
 
-Generate the auth secret with:
+If configuring a hosted environment without the setup script, generate a secret with:
 
 ```powershell
 python -c "import secrets; print(secrets.token_urlsafe(48))"
@@ -35,6 +36,11 @@ Missing database or auth-secret configuration returns HTTP 503 for account APIs;
 there is no console-code, fixed-code, or in-memory production fallback. Missing
 email configuration prevents code requests. `/health` reports whether auth storage
 was configured, not whether email has been delivered or Mongo remains reachable.
+`GET /api/auth/readiness` and `dark doctor` check configuration presence and ping
+MongoDB without sending email. A ready result has HTTP 200; missing configuration
+or unreachable storage returns HTTP 503. Email delivery is explicitly unverified
+until a real code arrives. `dark doctor` exits 2 for a not-ready service and 1 for
+connection/protocol errors.
 
 Cloudflare's [Email Service](https://developers.cloudflare.com/email-service/)
 supports outbound transactional email through the
@@ -46,7 +52,13 @@ required DNS authentication records before testing public signup.
 
 ## Run locally
 
-From the repository root:
+The combined runner starts both processes and loads the root environment:
+
+```powershell
+.\scripts\start-service.ps1
+```
+
+For separate terminals, from the repository root:
 
 ```powershell
 uv pip install --python .venv\Scripts\python.exe -e './backend[dev]' -e './cli[dev]'
@@ -66,14 +78,23 @@ The default origins are `http://127.0.0.1:3000` for the website and
 `localhost` and `127.0.0.1` have different origins and cookie scopes. Next.js
 proxies `/api/*` to `DARK_BACKEND_URL`, configured in the Next.js environment.
 When running Next from `frontend/`, set that override in `frontend/.env.local`
-if needed; the default backend URL needs no override. CLI `.env` loading reads
-`DARK_SERVER_URL` from the repository root when invoked there. Elsewhere, set
-the environment variable explicitly or pass `--server`.
+if needed; the default backend URL needs no override.
+
+The installed CLI discovers `.env` from its working directory and parent
+directories. `DARK_ENV_FILE` selects an explicit file. Server selection is
+`--server`, then `DARK_SERVER_URL`, then the server remembered after login, then
+`http://127.0.0.1:3000`. An explicitly configured environment URL overrides the
+remembered preference; change or clear it when switching websites. The non-secret
+server preference lives in the per-user Dark config directory; `DARK_CONFIG_DIR`
+can override that location. Tokens remain in the native OS credential store.
+Clients on other computers need only the website URL and their own login, not
+the MongoDB or Cloudflare service credentials.
 
 Open `/login`, enter your email, and verify its eight-digit code. Then:
 
 ```powershell
 .\.venv\Scripts\dark.exe login
+.\.venv\Scripts\dark.exe doctor
 .\.venv\Scripts\dark.exe whoami
 .\.venv\Scripts\dark.exe logout
 
@@ -98,6 +119,8 @@ After a probe or exercise has produced a `report.json`, run:
 
 # Upload using the account connected by dark login.
 .\.venv\Scripts\dark.exe runs upload .dark\runs\<run-directory> --open
+.\.venv\Scripts\dark.exe runs list
+.\.venv\Scripts\dark.exe runs show <run-id> --open
 ```
 
 The export contains the window title, scenario name, outcome, completion time,
@@ -152,11 +175,7 @@ the ASGI peer address, which Uvicorn can populate from trusted proxy headers.
 ## Verification
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest backend\tests cli\tests -q
-.\.venv\Scripts\python.exe -m ruff check backend\app\auth.py backend\app\auth_routes.py backend\app\email.py backend\app\settings.py backend\app\main.py backend\tests cli
-cd frontend
-npm run lint
-npm run build
+.\scripts\verify-service.ps1
 ```
 
 Automated auth tests use mongomock and a captured mail adapter, and cover the
