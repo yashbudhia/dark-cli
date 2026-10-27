@@ -2,6 +2,8 @@
 
 Dark connects your terminal to an account, inspects authorized Windows apps,
 runs explicit test scenarios, and saves reports with expected versus observed text.
+Running `dark` opens an interactive agent: type a task, watch it use file, terminal
+and Windows tools, and use slash commands for account login, settings and updates.
 The account and report service uses MongoDB, Resend email codes, and a Next.js
 workspace. Model-guided scanning and CTF solving remain planned work.
 
@@ -65,8 +67,7 @@ For the npm release, install the client and connect to the hosted service:
 
 ```powershell
 npm install -g dark-agent-cli
-dark login
-dark doctor
+dark
 ```
 
 The npm package bundles the Python client and installs its runtime on first use;
@@ -75,6 +76,12 @@ Windows desktop commands also install their pinned MCP dependency on first use.
 The package is published at [dark-agent-cli on npm](https://www.npmjs.com/package/dark-agent-cli).
 For local release testing, build with `npm pack` in `npm/` and install the generated
 `.tgz`. See [npm packaging and release steps](npm/README.md).
+
+In chat, `/help` lists commands, `/provider` connects a model, `/login` connects
+your report account, and `/update` updates the global npm install and restarts.
+Model calls currently use your provider key; website credits do not pay for them.
+For one task, use `dark run "your task"`. Ctrl+C cancels an active task and returns
+to the prompt. Use `dark update` to update from the shell.
 
 To run your own backend and website locally:
 

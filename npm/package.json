@@ -1,7 +1,7 @@
 {
   "name": "dark-agent-cli",
-  "version": "0.1.0",
-  "description": "Dark CLI: connect your account, inspect Windows apps, and share desktop test reports.",
+  "version": "0.2.0",
+  "description": "Dark: an interactive terminal agent with slash commands, coding tools, and Windows computer control.",
   "license": "UNLICENSED",
   "type": "module",
   "bin": { "dark": "bin/dark.mjs" },
@@ -12,7 +12,7 @@
     "prepack": "npm run build",
     "prepublishOnly": "npm test && npm run check && npm run build && npm run test:pack",
     "test": "node --test",
-    "check": "node --check bin/dark.mjs && node --check lib/runtime.mjs && node --check scripts/build.mjs",
+    "check": "node --check bin/dark.mjs && node --check lib/runtime.mjs && node --check lib/update.mjs && node --check scripts/build.mjs",
     "test:pack": "node scripts/verify-pack.mjs"
   },
   "repository": { "type": "git", "url": "git+https://github.com/yashbudhia/dark-cli.git", "directory": "npm" },

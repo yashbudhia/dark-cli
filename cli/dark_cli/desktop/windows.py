@@ -11,7 +11,7 @@ import json
 import os
 import shutil
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -147,9 +147,7 @@ class WindowsDesktop:
         try:
             # Never retry mutations: a timeout can occur after the action committed.
             with ui.tool_call(name, str(arguments.get("action", ""))):
-                result = await asyncio.wait_for(
-                    self.session.call_tool(name, arguments), timeout=30
-                )
+                result = await asyncio.wait_for(self.session.call_tool(name, arguments), timeout=30)
             data = unpack(result)
         except TimeoutError as exc:
             if self.evidence:
@@ -191,13 +189,15 @@ class WindowsDesktop:
 
 
 @asynccontextmanager
-async def connect(evidence: Evidence | None = None) -> AsyncIterator[WindowsDesktop]:
+async def connect(
+    evidence: Evidence | None = None, *, show_progress: bool = True
+) -> AsyncIterator[WindowsDesktop]:
     if os.name != "nt":
         raise DesktopError("The desktop adapter requires Windows 10/11")
     params = StdioServerParameters(command=executable(), args=[])
     with open(os.devnull, "w") as errlog:
         # One spinner spans the whole session; each tool call swaps its label.
-        with ui.progress("Working"):
+        with ui.progress("Working") if show_progress else nullcontext():
             async with stdio_client(params, errlog=errlog) as (read, write):
                 async with ClientSession(read, write) as session:
                     with ui.tool_call("connect", "Windows desktop server"):

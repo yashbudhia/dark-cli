@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 import typer
 
 from . import __version__
@@ -12,8 +14,8 @@ from .runs import app as runs_app
 
 app = typer.Typer(
     name="dark",
-    help="Connect your account, inspect authorized Windows apps, and manage saved test reports.",
-    no_args_is_help=True,
+    help="Dark: an interactive agent for your code, terminal, and Windows desktop.",
+    no_args_is_help=False,
 )
 
 ctf_app = typer.Typer(help="Sanctioned CTF challenges.", no_args_is_help=True)
@@ -25,6 +27,7 @@ register_auth(app)
 
 @app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     version: bool = typer.Option(
         False, "--version", is_eager=True, help="Print the installed CLI version."
     ),
@@ -37,6 +40,35 @@ def main(
     except ConfigError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(2) from exc
+    if ctx.invoked_subcommand is None:
+        from .chat import launch
+
+        launch()
+
+
+@app.command("chat")
+def chat() -> None:
+    """Open the interactive agent. This is also the default when running dark."""
+    from .chat import launch
+
+    launch()
+
+
+@app.command("run")
+def run_task(prompt: str = typer.Argument(..., help="Task for the agent to carry out.")) -> None:
+    """Run one natural-language task and exit."""
+    from .chat import launch
+
+    if not launch(prompt):
+        raise typer.Exit(1)
+
+
+@app.command("update")
+def update() -> None:
+    """Update the npm CLI to the latest release."""
+    if os.environ.get("DARK_NPM_LAUNCHER"):
+        raise typer.Exit(85)
+    typer.echo("Update with: npm install -g dark-agent-cli@latest")
 
 
 @app.command()

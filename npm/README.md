@@ -4,8 +4,7 @@ Install with Node.js 20.11 or newer:
 
 ```sh
 npm install -g dark-agent-cli
-dark login
-dark doctor
+dark
 ```
 
 Or run without a global installation:
@@ -14,7 +13,36 @@ Or run without a global installation:
 npx --package dark-agent-cli dark login
 ```
 
-Dark opens https://dark-cli-web.vercel.app for email sign-in and computer approval.
+Plain `dark` opens a conversational terminal with streamed replies and visible tool
+calls. Type a task such as "create a Python script and run it" or "open Windows
+Settings". The agent can read/write workspace files, run terminal commands, and
+load native Windows tools for inspecting and controlling applications.
+
+```text
+❯ /help
+❯ /login
+❯ Create hello.py that prints hello, then run it and check the output.
+❯ /update
+```
+
+Use `/provider` to configure an OpenAI-compatible endpoint and model key. Keys are
+stored in the native OS credential store. `DARK_API_KEY`, `DARK_BASE_URL` and
+`DARK_MODEL` in a local `.env` are also supported; Refuseless is the default
+provider. Account login manages report storage and devices; model calls currently
+use your own provider key, independently of the website credit balance.
+
+Slash commands include `/help`, `/login`, `/logout`, `/whoami`, `/doctor`, `/provider`,
+`/model`, `/tools`, `/desktop`, `/runs`, `/cwd`, `/clear`, `/update` and `/exit`.
+Tab completes commands, Alt+Enter inserts a newline, and Ctrl+C stops an active
+task. Conversation history stays in memory for the current session.
+
+For one task without an interactive session:
+
+```sh
+dark run "Read this project's README and summarize the setup steps"
+```
+
+`/login` opens https://dark-cli-web.vercel.app for email sign-in and computer approval.
 The CLI session is saved in your native OS credential store. Linux needs a working
 Secret Service/KWallet keyring; Windows and macOS use their native stores.
 
@@ -39,8 +67,19 @@ dark runs list
 dark logout
 ```
 
-Native desktop probes and explicit scenarios are available. Autonomous model-guided
-scanning is still in development. Installing this package does not enable that feature.
+The interactive agent executes model-selected tools. The separate `scan` and `ctf`
+pipelines for replay-verified security findings are still in development.
+
+## Updating
+
+```sh
+dark update
+```
+
+Or use `/update` in chat to install the latest global npm version and restart Dark.
+Local/npx installations show the appropriate install command instead of modifying
+a different global installation. Updating from 0.1.0 requires running
+`npm install -g dark-agent-cli@latest` once to get these new commands.
 
 ## Configuration
 
