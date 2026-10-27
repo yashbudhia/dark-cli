@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from .auth import register as register_auth
 from .desktop.cli import app as desktop_app
+from .runs import app as runs_app
 
 load_dotenv()
 
@@ -19,6 +20,7 @@ app = typer.Typer(
 ctf_app = typer.Typer(help="Sanctioned CTF challenges.", no_args_is_help=True)
 app.add_typer(ctf_app, name="ctf")
 app.add_typer(desktop_app, name="desktop")
+app.add_typer(runs_app, name="runs")
 register_auth(app)
 
 

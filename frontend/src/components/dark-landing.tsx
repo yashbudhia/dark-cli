@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { BandsBackground } from "./bands-background";
@@ -24,10 +25,10 @@ function Button({ children, href = guide, arrow = false, secondary = false }: {
   secondary?: boolean;
 }) {
   const external = href.startsWith("http");
-  return <a className={`button${secondary ? " button-secondary" : ""}`} href={href}
+  return <Link className={`button${secondary ? " button-secondary" : ""}`} href={href}
     target={external ? "_blank" : undefined} rel={external ? "noreferrer" : undefined}>
     {children}{arrow && <Icon name="arrow" />}
-  </a>;
+  </Link>;
 }
 
 function Brand() {
@@ -59,7 +60,7 @@ function Navigation() {
     <nav className="nav-inner" aria-label="Main navigation">
       <Brand />
       <div className="desktop-nav">{navItems.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}</div>
-      <a className="nav-cta" href={repository} target="_blank" rel="noreferrer">View source <Icon name="arrow" /></a>
+      <Link className="nav-cta" href="/login">Sign in <Icon name="arrow" /></Link>
       <button ref={menuButton} className="menu-button" aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open} aria-controls="mobile-nav" onClick={() => setOpen(!open)}>
         <span className={open ? "menu-lines is-open" : "menu-lines"} />
@@ -67,7 +68,7 @@ function Navigation() {
     </nav>
     {open && <nav id="mobile-nav" className="mobile-nav" aria-label="Mobile navigation">
       {navItems.map(([label, id]) => <a href={`#${id}`} key={id} onClick={() => setOpen(false)}>{label}<Icon name="arrow" /></a>)}
-      <a href={repository} target="_blank" rel="noreferrer">View source<Icon name="arrow" /></a>
+      <Link href="/login">Sign in<Icon name="arrow" /></Link>
     </nav>}
   </header>;
 }
@@ -237,7 +238,7 @@ export function DarkLanding() {
         <div className="hero-copy"><span className="hero-eyebrow">OPEN SOURCE / SECURITY TESTING</span>
           <h1><MotionText text="Test the behavior." /><br className="desktop-break" /> <MotionText text="Keep the proof." /></h1>
           <p><MotionText text="Dark inspects native Windows apps, runs explicit test scenarios, and saves the evidence you need to investigate a failure." /></p>
-          <Button arrow>Get started with Dark</Button>
+          <Button href="/login" arrow>Get started with Dark</Button>
         </div><div className="hero-dashboard"><EvidencePreview /></div>
       </div></section>
       <CapabilityReel />

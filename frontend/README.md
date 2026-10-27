@@ -1,8 +1,14 @@
 ﻿# Dark frontend
 
-A Next.js landing page for the Dark CLI. It explains the implemented native
+A Next.js landing page and account workspace for the Dark CLI. It explains the implemented native
 Windows testing workflow: read-only probes, explicit scenario exercises, and
 locally saved evidence.
+
+Account pages are available at `/login`, `/connect`, `/dashboard`, and
+`/dashboard/runs/<id>`. Sign-in uses email codes; the workspace lists connected
+computers and uploaded desktop reports. See [account setup](../docs/AUTH.md)
+for MongoDB and Cloudflare email configuration. The landing page's sign-in and
+Get started links lead to `/login`; the setup guide remains in the footer.
 
 ```powershell
 npm install
@@ -11,7 +17,7 @@ npm run dev
 ```
 
 Run `npm run lint`, `npm run typecheck`, and `npm run build` to verify changes.
-The page's setup links point to the repository's native Windows guide. The
+The setup guide links point to the repository's native Windows guide. The
 `/api/*` and `/health` proxy routes remain available; `DARK_BACKEND_URL` can
 change their default backend target.
 

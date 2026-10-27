@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Path, Request
 from fastapi.responses import JSONResponse
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError, PyMongoError
@@ -13,7 +13,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 from .auth import AuthError, AuthService
 from .auth_routes import Principal, Service, router
 from .email import CloudflareMailer
-from .models import Finding, RefusalEvent, Run
+from .models import DesktopReport, Finding, RefusalEvent, Run, RunStatus
 from .settings import Settings
 
 load_dotenv()
@@ -93,8 +93,38 @@ def create_app(
     def list_runs(identity: Principal, auth: Service) -> list[Run]:
         return [
             Run.model_validate(row)
-            for row in auth.db.runs.find({"owner_id": identity[0]["_id"]})
+            for row in auth.db.runs.find(
+                {"owner_id": identity[0]["_id"]}, {"desktop_report": 0}
+            )
+            .sort("started_at", -1)
+            .limit(100)
         ]
+
+    @application.put("/api/runs/import/{fingerprint}")
+    def import_desktop_run(
+        report: DesktopReport,
+        identity: Principal,
+        auth: Service,
+        fingerprint: str = Path(pattern=r"^[a-f0-9]{64}$"),
+    ) -> Run:
+        owner = identity[0]["_id"]
+        run = Run(
+            id=f"desktop_{fingerprint}",
+            kind="desktop",
+            target=report.window_title,
+            goal=report.scenario or "Desktop observation",
+            status=RunStatus(report.status),
+            started_at=report.finished_at,
+            finished_at=report.finished_at,
+            desktop_report=report,
+        )
+        # Stable import IDs make a retry after an ambiguous network failure safe.
+        auth.db.runs.replace_one(
+            {"owner_id": owner, "id": run.id},
+            {**run.model_dump(mode="json"), "owner_id": owner},
+            upsert=True,
+        )
+        return run
 
     @application.get("/api/runs/{run_id}")
     def get_run(run_id: str, identity: Principal, auth: Service) -> Run:

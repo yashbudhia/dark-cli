@@ -32,14 +32,27 @@ export function errorMessage(error: unknown): string {
 
 export type Account = { user: { id: string; email: string }; session: { kind: string } };
 export type Device = { id: string; name: string; created_at: string; expires_at: string };
-export type Run = { id: string; target: string; goal: string; status: string; started_at: string };
+export type DesktopAssertion = {
+  expected_text: string; observed_text: string | null; passed: boolean;
+  step: number | null; match: "exact" | "contains";
+};
+export type DesktopReport = {
+  status: string; finished_at: string; window_title: string; scenario: string | null;
+  assertions: DesktopAssertion[]; reason: string | null; error: string | null; verified_finding: false;
+};
+export type Run = {
+  id: string; target: string; goal: string; status: string; started_at: string;
+  finished_at: string | null; kind: "scan" | "desktop"; desktop_report: DesktopReport | null;
+};
 
 export function loginDestination(): string {
   const requested = new URLSearchParams(window.location.search).get("next") || "/dashboard";
   // Only account destinations are accepted, including a CLI code carried through sign-in.
   try {
     const target = new URL(requested, window.location.origin);
-    if (target.origin === window.location.origin && ["/dashboard", "/connect"].includes(target.pathname)) {
+    const allowed = ["/dashboard", "/connect"].includes(target.pathname)
+      || /^\/dashboard\/runs\/[a-zA-Z0-9_-]{1,80}$/.test(target.pathname);
+    if (target.origin === window.location.origin && allowed) {
       return target.pathname + target.search;
     }
   } catch { /* Use the dashboard for malformed destinations. */ }

@@ -53,6 +53,24 @@ cd frontend && npm install && npm run dev   # http://127.0.0.1:3000
 
 Model endpoints are configured via `.env` (see `.env.example`).
 
+## Accounts and saved reports
+
+Email sign-in, MongoDB storage and browser-approved CLI pairing are implemented.
+Configure the backend credentials in [docs/AUTH.md](docs/AUTH.md), then open
+`http://127.0.0.1:3000/login` and run `dark login` to connect your terminal.
+
+```powershell
+dark whoami
+dark runs upload .dark\runs\<run-directory> --dry-run
+dark runs upload .dark\runs\<run-directory> --open
+dark logout
+```
+
+Uploads send a report summary and assertions to your account. The dashboard shows
+expected versus observed text and supports revoking connected computers. Raw
+snapshots, screenshots and event logs stay local. A failed assertion remains a
+test result and is not automatically promoted to a verified security finding.
+
 ## Native Windows milestone
 
 The desktop slice runs independently of the backend/dashboard. It uses the

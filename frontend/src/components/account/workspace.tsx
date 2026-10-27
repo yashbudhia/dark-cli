@@ -64,8 +64,8 @@ export function Workspace() {
         </li>)}</ul> : <div className="workspace-empty"><p>No computers connected yet. Start with <code>dark login</code>.</p></div>}
       </section>
       <section className="workspace-section"><div className="workspace-section-heading"><h2>Saved runs</h2><span>{runs.length}</span></div>
-        {runs.length ? <ul className="workspace-list">{runs.map(run => <li key={run.id}><div><strong>{run.goal}</strong><p>{run.target}</p></div><span className="workspace-status">{run.status}</span></li>)}</ul>
-          : <div className="workspace-empty"><p>No uploaded runs yet. Desktop evidence is saved locally until you upload it.</p></div>}
+        {runs.length ? <ul className="workspace-list">{runs.map(run => <li key={run.id}><div><Link className="workspace-run-link" href={`/dashboard/runs/${encodeURIComponent(run.id)}`}><strong>{run.goal}</strong></Link><p>{run.target}</p></div><span className={`workspace-status status-${run.status}`}>{run.status}</span></li>)}</ul>
+          : <div className="workspace-empty"><p>No uploaded runs yet. Upload a saved report from your terminal.</p><code>dark runs upload .dark/runs/&lt;run&gt;</code><p>Preview the export first with <code>--dry-run</code>.</p></div>}
       </section>
     </>}
   </div>;

@@ -85,8 +85,39 @@ Open `/login`, enter your email, and verify its eight-digit code. Then:
 website displays the requesting computer and requires confirmation that the code
 matches the terminal. Approve or decline explicitly. `/dashboard` shows connected
 CLI sessions, lets you revoke them, and lists run records submitted to the API.
-Desktop commands continue saving evidence locally; automatic run upload and
-remote task dispatch are not implemented by this account milestone.
+Desktop commands continue saving evidence locally. Use the explicit upload
+command below to send a report; remote task dispatch is not implemented.
+
+## Upload a desktop report
+
+After a probe or exercise has produced a `report.json`, run:
+
+```powershell
+# Review the exact content without credentials or a network request.
+.\.venv\Scripts\dark.exe runs upload .dark\runs\<run-directory> --dry-run
+
+# Upload using the account connected by dark login.
+.\.venv\Scripts\dark.exe runs upload .dark\runs\<run-directory> --open
+```
+
+The export contains the window title, scenario name, outcome, completion time,
+assertions with expected and observed text, and any reason or error message.
+It excludes the local evidence-directory field, window handles, raw snapshots,
+screenshots, event logs and tool metadata. Text inside assertions and error
+messages is preserved, so review the dry-run output before uploading a report
+from an application containing private data. Local reports over 256 KiB and
+malformed reports are rejected before any upload.
+
+Each export has a stable SHA-256 fingerprint. Uploads use an idempotent PUT,
+so retrying the same export updates the same owner-scoped record. An interrupted
+request can be retried with the same command. Changing exported content creates
+a new record. Uploaded reports always have `verified_finding: false`.
+
+The workspace lists the latest 100 saved runs. Open a row to view its report at
+`/dashboard/runs/<id>` with the expected and observed values of each assertion.
+Direct report links preserve their destination through sign-in. The source
+reports currently record completion time; imported runs use that timestamp for
+ordering and do not infer a run duration.
 
 ## Session behavior
 

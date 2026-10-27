@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _id() -> str:
@@ -24,6 +25,10 @@ class RunStatus(str, Enum):
     verifying = "verifying"
     done = "done"
     failed = "failed"
+    observed = "observed"
+    passed = "passed"
+    error = "error"
+    preview = "preview"
 
 
 class Severity(str, Enum):
@@ -34,6 +39,27 @@ class Severity(str, Enum):
     critical = "critical"
 
 
+class DesktopAssertion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_text: str = Field(max_length=10000)
+    observed_text: str | None = Field(default=None, max_length=10000)
+    passed: StrictBool
+    step: int | None = Field(default=None, ge=1, le=1000)
+    match: Literal["exact", "contains"] = "contains"
+
+
+class DesktopReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["observed", "passed", "failed", "error", "preview"]
+    finished_at: datetime
+    window_title: str = Field(default="Unknown window", max_length=1000)
+    scenario: str | None = Field(default=None, max_length=2000)
+    assertions: list[DesktopAssertion] = Field(default_factory=list, max_length=100)
+    reason: str | None = Field(default=None, max_length=10000)
+    error: str | None = Field(default=None, max_length=10000)
+    verified_finding: Literal[False] = False
+
+
 class Run(BaseModel):
     id: str = Field(default_factory=_id)
     target: str
@@ -41,6 +67,8 @@ class Run(BaseModel):
     status: RunStatus = RunStatus.pending
     started_at: datetime = Field(default_factory=_now)
     finished_at: datetime | None = None
+    kind: Literal["scan", "desktop"] = "scan"
+    desktop_report: DesktopReport | None = None
 
 
 class Finding(BaseModel):
@@ -51,7 +79,9 @@ class Finding(BaseModel):
     title: str
     severity: Severity = Severity.info
     hypothesis: str = ""
-    evidence: list[str] = Field(default_factory=list)  # screenshot paths, network errors
+    evidence: list[str] = Field(
+        default_factory=list
+    )  # screenshot paths, network errors
     reproduction: list[str] = Field(default_factory=list)  # recorded action log
     verified: bool = False
     regression_test: str | None = None  # generated Playwright/UIA test path
