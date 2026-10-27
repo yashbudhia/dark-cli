@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AccountError, accountApi, errorMessage } from "@/lib/account-api";
+import { AccountError, accountApi, errorMessage, redirectToSignIn } from "@/lib/account-api";
 import type { Run } from "@/lib/account-api";
 
 export function RunReport({ runId }: { runId: string }) {
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
     accountApi<Run>(`/runs/${encodeURIComponent(runId)}`).then(result => {
@@ -16,13 +17,13 @@ export function RunReport({ runId }: { runId: string }) {
     }).catch(error => {
       if (!active) return;
       if (error instanceof AccountError && error.status === 401) {
-        window.location.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+        redirectToSignIn();
       } else if (error instanceof AccountError && error.status === 404) {
         setError("This report was not found in your account.");
       } else setError(errorMessage(error));
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [runId]);
+  }, [runId, attempt]);
 
   const report = run?.desktop_report;
   const passed = report?.assertions.filter(assertion => assertion.passed).length ?? 0;
@@ -32,6 +33,7 @@ export function RunReport({ runId }: { runId: string }) {
     <Link className="report-back" href="/dashboard">← Back to workspace</Link>
     {loading && <p className="account-intro" role="status">Loading report…</p>}
     {error && <p className="account-error" role="alert">{error}</p>}
+    {!loading && error && <button className="button button-secondary" onClick={() => { setLoading(true); setError(""); setAttempt(current => current + 1); }}>Try again</button>}
     {run && <>
       <header className="report-heading"><div><span className="account-step">{run.kind === "desktop" ? "Desktop report" : "Run report"}</span>
         <h1>{run.goal}</h1><p className="account-intro">{run.target}</p></div>

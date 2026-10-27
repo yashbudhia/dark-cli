@@ -41,6 +41,8 @@
 .account-checkbox code { font-family: var(--code); }
 .account-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 .workspace-heading { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.workspace-heading > div:first-child { min-width: 0; }
+.workspace-heading > .account-actions { flex-shrink: 0; }
 .workspace-connect { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding: 32px; background: var(--surface); border: 1px solid #333; border-radius: 4px; margin: 24px 0 56px; }
 .workspace h2 { font: 500 20px/1.4 var(--mono); letter-spacing: -.04em; }
 .workspace-connect p { font-size: 14px; line-height: 1.7; margin: 12px 0 20px; max-width: 480px; }

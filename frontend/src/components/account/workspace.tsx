@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AccountError, accountApi, errorMessage } from "@/lib/account-api";
+import { AccountError, accountApi, errorMessage, redirectToSignIn } from "@/lib/account-api";
 import type { Account, Device, Run } from "@/lib/account-api";
 
 export function Workspace() {
@@ -14,6 +14,7 @@ export function Workspace() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -25,35 +26,49 @@ export function Workspace() {
         if (active) { setAccount(user); setDevices(connected); setRuns(records); }
       } catch (error) {
         if (!active) return;
-        if (error instanceof AccountError && error.status === 401) window.location.replace("/login");
+        if (error instanceof AccountError && error.status === 401) redirectToSignIn();
         else setError(errorMessage(error));
       } finally { if (active) setLoading(false); }
     }
     void load();
     return () => { active = false; };
-  }, []);
+  }, [attempt]);
+
+  function refresh() {
+    setLoading(true); setError(""); setAttempt(current => current + 1);
+  }
 
   async function revoke(id: string) {
     setBusy(id); setError("");
     try {
       await accountApi(`/auth/devices/${id}`, { method: "DELETE" });
       setDevices(current => current.filter(device => device.id !== id));
-    } catch (error) { setError(errorMessage(error)); }
+    } catch (error) {
+      if (error instanceof AccountError && error.status === 401) redirectToSignIn();
+      else if (error instanceof AccountError && error.status === 404) setDevices(current => current.filter(device => device.id !== id));
+      else setError(errorMessage(error));
+    }
     finally { setBusy(""); }
   }
 
   async function signOut() {
     setBusy("logout"); setError("");
     try { await accountApi("/auth/logout", { method: "POST" }); router.replace("/login"); }
-    catch (error) { setError(errorMessage(error)); setBusy(""); }
+    catch (error) {
+      if (error instanceof AccountError && error.status === 401) router.replace("/login");
+      else setError(errorMessage(error));
+      setBusy("");
+    }
   }
 
   return <div className="workspace">
     <div className="workspace-heading"><div><span className="account-step">Your workspace</span><h1>Ready when you are.</h1>
       <p className="account-intro">{account?.user.email || (loading ? "Loading your account…" : "Your Dark account")}</p></div>
-      {account && <button className="button button-secondary" disabled={Boolean(busy)} onClick={() => void signOut()}>Sign out</button>}
+      {account && <div className="account-actions"><button className="button button-secondary" disabled={Boolean(busy) || loading} onClick={refresh}>Refresh workspace</button>
+        <button className="button button-secondary" disabled={Boolean(busy) || loading} onClick={() => void signOut()}>Sign out</button></div>}
     </div>
     {error && <p className="account-error" role="alert">{error}</p>}
+    {!loading && !account && error && <button className="button button-secondary" onClick={refresh}>Try again</button>}
     {loading ? <p role="status">Loading workspace…</p> : account && <>
       <section className="workspace-connect"><div><h2>Connect your computer.</h2><p>Run this in your terminal, then approve the pairing code in your browser.</p><code>$ dark login</code></div>
         <Link className="button" href="/connect">Enter pairing code</Link></section>
