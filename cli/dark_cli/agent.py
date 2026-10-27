@@ -10,12 +10,11 @@ import os
 import re
 import signal
 import subprocess
+import time
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
-
-from openai import AsyncOpenAI
 
 from .auth import Credentials
 from .config import settings_path
@@ -195,6 +194,7 @@ class Agent:
         self.event = event or (lambda *_: None)
         self.ask = ask
         self.client = client
+        self.owns_client = client is None
         self.messages: list[dict] = []
         self.desktop = None
         self.desktop_schemas: list[dict] = []
@@ -202,6 +202,11 @@ class Agent:
 
     def clear(self):
         self.messages.clear()
+
+    async def close(self):
+        if self.owns_client and self.client is not None:
+            await self.client.close()
+            self.client = None
 
     def path(self, value: str) -> Path:
         path = (self.root / value).resolve()
@@ -372,8 +377,14 @@ class Agent:
         raise AgentError("Unknown tool requested; no action was executed.")
 
     async def describe_image(self, url: str, question: str) -> str:
+        vision_model = os.getenv("DARK_VISION_MODEL", "").strip() or self.config.model
+        if (
+            vision_model == "deepseek-v4.1-flash-fast"
+            and self.config.base.rstrip("/") == DEFAULT_BASE
+        ):
+            vision_model = DEFAULT_MODEL
         response = await self.client.chat.completions.create(
-            model=os.getenv("DARK_VISION_MODEL", "").strip() or self.config.model,
+            model=vision_model,
             messages=[
                 {
                     "role": "user",
@@ -392,14 +403,21 @@ class Agent:
         return clean(response.choices[0].message.content or "Image description unavailable.")
 
     async def completion(self, messages: list[dict], tools: list[dict]) -> dict:
+        speed = {}
+        if self.config.base.rstrip("/") == DEFAULT_BASE and self.config.model.startswith(
+            ("glm-", "deepseek-")
+        ):
+            speed["reasoning_effort"] = "low"
         stream = await self.client.chat.completions.create(
             model=self.config.model,
             messages=messages,
             tools=tools,
             stream=True,
             max_tokens=4096,
+            **speed,
         )
         content, reasoning, calls = "", "", {}
+        last_render = 0.0
         async with stream:
             async for chunk in stream:
                 if not chunk.choices:
@@ -407,7 +425,9 @@ class Agent:
                 delta = chunk.choices[0].delta
                 if delta.content:
                     content += delta.content
-                    self.event("text", clean(content))
+                    if time.monotonic() - last_render >= 0.05:
+                        self.event("text", clean(content))
+                        last_render = time.monotonic()
                 reasoning += getattr(delta, "reasoning_content", None) or ""
                 for item in delta.tool_calls or []:
                     call = calls.setdefault(
@@ -418,6 +438,8 @@ class Agent:
                     if item.function:
                         call["function"]["name"] += item.function.name or ""
                         call["function"]["arguments"] += item.function.arguments or ""
+        if content:
+            self.event("text", clean(content))
         message = {"role": "assistant", "content": content or None}
         if reasoning:
             message["reasoning_content"] = reasoning
@@ -434,8 +456,9 @@ class Agent:
             raise AgentError(
                 "Connect a model with /provider, or set DARK_API_KEY in your local .env."
             )
-        owned_client = self.client is None
-        if owned_client:
+        if self.client is None:
+            from openai import AsyncOpenAI
+
             self.client = AsyncOpenAI(
                 api_key=self.config.key, base_url=self.config.base, max_retries=0, timeout=60
             )
@@ -528,6 +551,3 @@ class Agent:
             self.event("response_end", None)
             self.desktop = None
             self.desktop_schemas = []
-            if owned_client:
-                await self.client.close()
-                self.client = None

@@ -11,7 +11,6 @@ import sys
 import time
 from pathlib import Path
 
-from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
 from prompt_toolkit import PromptSession
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.completion import Completer, Completion
@@ -38,6 +37,7 @@ COMMANDS = {
     "/doctor": "Check the hosted service",
     "/provider": "Set your model endpoint and API key",
     "/model": "Show or change the model: /model <id>",
+    "/fast": "Use the lower-latency Refuseless model",
     "/tools": "Show the agent's tools",
     "/desktop": "Run desktop commands: /desktop windows",
     "/runs": "Manage reports: /runs list",
@@ -58,6 +58,10 @@ class SlashCompleter(Completer):
 
 
 def error_text(exc: Exception) -> str:
+    if isinstance(exc, AgentError):
+        return clean(str(exc))
+    from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
+
     if isinstance(exc, AuthenticationError):
         return "The model rejected the API key. Update it with /provider."
     if isinstance(exc, RateLimitError):
@@ -229,6 +233,7 @@ class Chat:
         if not key:
             raise AgentError("A model API key is required. Your existing settings were preserved.")
         config.save()
+        await self.agent.close()
         self.config = config
         self.agent = Agent(config, self.root, event=self.event, ask=self.ask)
         self.console.print(
@@ -258,10 +263,15 @@ class Chat:
             self.banner()
         elif name in ("/provider", "/settings"):
             await self.configure()
-        elif name == "/model":
+        elif name in ("/model", "/fast"):
+            if name == "/fast":
+                if self.config.base.rstrip("/") != DEFAULT_BASE:
+                    raise AgentError("Use /model to choose a faster model from your provider.")
+                rest = "deepseek-v4.1-flash-fast"
             if rest:
                 config = ModelConfig(self.config.base, rest, self.config.key)
                 config.save()
+                await self.agent.close()
                 self.config = config
                 self.agent = Agent(config, self.root, event=self.event, ask=self.ask)
             self.console.print(Text(self.config.model, style=ACCENT))
@@ -271,6 +281,7 @@ class Chat:
                 if not path.is_dir():
                     raise AgentError("Workspace directory does not exist.")
                 self.root = path
+                await self.agent.close()
                 self.agent = Agent(self.config, path, event=self.event, ask=self.ask)
             self.console.print(Text(str(self.root)))
         elif name == "/tools":
@@ -370,8 +381,15 @@ class Chat:
 
 
 def launch(prompt: str | None = None) -> bool:
+    async def managed():
+        chat = Chat()
+        try:
+            return await chat.run(prompt)
+        finally:
+            await chat.agent.close()
+
     try:
-        return asyncio.run(Chat().run(prompt))
+        return asyncio.run(managed())
     except (KeyboardInterrupt, EOFError):
         return False
     except Exception as exc:

@@ -164,8 +164,11 @@ ordering and do not infer a run duration.
 - CLI sessions: thirty days; opaque bearer token, stored through Python keyring
   (Windows Credential Manager on Windows). Tokens are scoped locally by server
   origin. No plaintext credential file is created; unavailable keyrings fail closed.
-- Pairing: ten minutes, five-second polling, increased wait on `slow_down`, one-time
-  token exchange, explicit approval or denial. Bearer CLI tokens cannot approve
+- Pairing: ten minutes, negotiated two-second polling (five for older clients),
+  explicit approval or denial, and one session per request. Transport failures are
+  retried, and the same device secret can recover that session until pairing expires
+  if the token response is lost. A revoked session cannot be recreated this way.
+  Bearer CLI tokens cannot approve
   computers or manage other device credentials.
 - Mongo stores HMAC digests of codes and session tokens, not their plaintext.
   TTL indexes clean expired records, while queries enforce expiry immediately.

@@ -250,3 +250,75 @@ async def test_image_tool_sends_image_and_question_to_vision_model(tmp_path):
     content = create.call_args.kwargs["messages"][0]["content"]
     assert "What quantity?" in content[0]["text"]
     assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+@pytest.mark.asyncio
+async def test_model_connection_is_reused_until_chat_closes(tmp_path, monkeypatch):
+    import openai
+
+    client = fake_client([chunk("First answer")], [chunk("Second answer")])
+    client.close = AsyncMock()
+    created = []
+
+    def factory(**kwargs):
+        created.append(kwargs)
+        return client
+
+    monkeypatch.setattr(openai, "AsyncOpenAI", factory)
+    agent = Agent(ModelConfig("https://model.example/v1", "test", "test-key"), tmp_path)
+    await agent.turn("first")
+    await agent.turn("second")
+    assert len(created) == 1
+    client.close.assert_not_awaited()
+    await agent.close()
+    client.close.assert_awaited_once()
+
+
+def test_chat_startup_does_not_import_model_sdk():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import dark_cli.chat; assert 'openai' not in sys.modules",
+        ],
+        capture_output=True,
+        timeout=15,
+    )
+    assert result.returncode == 0
+
+
+def test_fast_command_switches_model_and_keeps_slash_session_working(monkeypatch):
+    from dark_cli import chat
+    from dark_cli.agent import DEFAULT_BASE
+
+    saved = []
+    monkeypatch.setattr(
+        chat.ModelConfig,
+        "load",
+        lambda: ModelConfig(DEFAULT_BASE, "glm-5.3-flash-abliterated", "test-key"),
+    )
+    monkeypatch.setattr(chat.ModelConfig, "save", lambda config: saved.append(config.model))
+    result = CliRunner().invoke(app, [], input="/fast\n/model\n/exit\n")
+    assert result.exit_code == 0
+    assert saved == ["deepseek-v4.1-flash-fast"]
+    assert "deepseek-v4.1-flash-fast" in result.output
+
+
+@pytest.mark.asyncio
+async def test_fast_model_retains_supported_vision_model(tmp_path):
+    from dark_cli.agent import DEFAULT_BASE, DEFAULT_MODEL
+
+    create = AsyncMock(
+        return_value=SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="image observed"))]
+        )
+    )
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    agent = Agent(
+        ModelConfig(DEFAULT_BASE, "deepseek-v4.1-flash-fast", "test-key"), tmp_path, client=client
+    )
+    await agent.describe_image("data:image/png;base64,abc", "describe")
+    assert create.call_args.kwargs["model"] == DEFAULT_MODEL

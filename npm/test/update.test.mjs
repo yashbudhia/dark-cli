@@ -28,7 +28,7 @@ test("global update installs the verified release and avoids downgrades", async 
   };
   try {
     await selfUpdate(pkg, operations);
-    assert.deepEqual(installs[0], ["install", "--global", "dark-agent-cli@0.3.0", "--registry=https://registry.npmjs.org"]);
+    assert.deepEqual(installs[0], ["install", "--global", "dark-agent-cli@0.3.0", "--registry=https://registry.npmjs.org", "--prefer-online"]);
     operations.capture = async (args) => args[0] === "root" ? globalRoot : "0.1.0";
     await selfUpdate(pkg, operations);
     assert.equal(installs.length, 1);

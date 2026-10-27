@@ -48,7 +48,7 @@ export async function selfUpdate(packageRoot, operations = {}) {
     throw new Error("This is a local or npx install. Use npm install -g dark-agent-cli@latest, or npx --yes --package dark-agent-cli@latest dark.");
   }
   const pkg = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8"));
-  const latest = await capture(["view", "dark-agent-cli", "version", "--registry=https://registry.npmjs.org"]);
+  const latest = await capture(["view", "dark-agent-cli", "version", "--prefer-online", "--registry=https://registry.npmjs.org"]);
   if (!/^\d+\.\d+\.\d+$/.test(latest)) throw new Error("npm returned an invalid release version. Retry the update shortly.");
   const currentParts = pkg.version.split(".").map(Number);
   const latestParts = latest.split(".").map(Number);
@@ -58,7 +58,7 @@ export async function selfUpdate(packageRoot, operations = {}) {
     return;
   }
   console.error(`Updating Dark ${pkg.version} → ${latest}…`);
-  const code = await install(["install", "--global", `dark-agent-cli@${latest}`, "--registry=https://registry.npmjs.org"]);
+  const code = await install(["install", "--global", `dark-agent-cli@${latest}`, "--registry=https://registry.npmjs.org", "--prefer-online"]);
   if (code !== 0) throw new Error(`npm update failed (exit ${code}). Retry npm install -g dark-agent-cli@latest.`);
   console.error(`Dark updated to ${latest}.`);
 }

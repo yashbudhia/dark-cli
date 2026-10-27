@@ -1,6 +1,6 @@
 [project]
 name = "dark-cli"
-version = "0.2.0"
+version = "0.2.1"
 description = "AI red-teaming CLI for authorized security testing — verified, replayable findings"
 requires-python = ">=3.11"
 dependencies = [

@@ -22,6 +22,10 @@ class LoginError(Exception):
     pass
 
 
+class ConnectionInterrupted(LoginError):
+    """A transport failure, which may be retried only for a recoverable operation."""
+
+
 def server_url(value: str) -> str:
     try:
         if any(ord(character) < 33 or ord(character) == 127 for character in value):
@@ -113,7 +117,12 @@ class AccountClient:
             self.server = server_url(configured_server(server))
         except ConfigError as exc:
             raise LoginError(str(exc)) from exc
-        self.http = httpx.Client(base_url=self.server, timeout=15, transport=transport)
+        self.http = httpx.Client(
+            base_url=self.server,
+            timeout=httpx.Timeout(30, connect=10),
+            transport=transport,
+            limits=httpx.Limits(keepalive_expiry=60),
+        )
 
     def close(self) -> None:
         self.http.close()
@@ -129,7 +138,7 @@ class AccountClient:
                 **kwargs,
             )
         except httpx.HTTPError as exc:
-            raise LoginError(
+            raise ConnectionInterrupted(
                 "Cannot reach the Dark server. Check --server and your connection."
             ) from exc
 
@@ -166,7 +175,7 @@ class AccountClient:
             self.request(
                 "POST",
                 "/api/auth/device/code",
-                json={"name": f"{socket.gethostname()} / Dark CLI"[:80]},
+                json={"name": f"{socket.gethostname()} / Dark CLI"[:80], "poll_interval": 2},
             )
         )
         try:
@@ -194,7 +203,7 @@ class AccountClient:
             interval, lifetime = pairing["interval"], pairing["expires_in"]
             if type(interval) is not int or type(lifetime) is not int:
                 raise ValueError("Invalid timing types")
-            if not (5 <= interval <= 30 and 1 <= lifetime <= 600):
+            if not (2 <= interval <= 30 and 1 <= lifetime <= 600):
                 raise ValueError("Invalid timing")
         except (KeyError, TypeError, ValueError) as exc:
             raise LoginError("Dark server returned an invalid pairing request.") from exc
@@ -206,14 +215,33 @@ class AccountClient:
                     notify("Could not open the browser. Open the URL above manually.")
             except (webbrowser.Error, OSError):
                 notify("Could not open the browser. Open the URL above manually.")
+        delay = 0
+        interrupted = False
         with ui.progress(f"Waiting for approval of {display_code} in your browser"):
             while clock() < deadline:
-                sleep(min(interval, max(0, deadline - clock())))
+                sleep(min(delay, max(0, deadline - clock())))
                 if clock() >= deadline:
                     break
-                response = self.request(
-                    "POST", "/api/auth/device/token", json={"device_code": device_code}
-                )
+                try:
+                    response = self.request(
+                        "POST", "/api/auth/device/token", json={"device_code": device_code}
+                    )
+                except ConnectionInterrupted:
+                    if not interrupted:
+                        notify(
+                            "Connection interrupted; retrying this pairing. Your browser approval is preserved."
+                        )
+                    interrupted = True
+                    delay = interval
+                    continue
+                delay = interval
+                if response.status_code in (429, 500, 502, 503, 504):
+                    if not interrupted:
+                        notify("Service temporarily unavailable; retrying this pairing.")
+                    interrupted = True
+                    delay = min(30, max(interval, retry_after(response, interval)))
+                    continue
+                interrupted = False
                 if response.is_success:
                     payload = self.require_success(response)
                     token = payload.get("access_token")
@@ -229,7 +257,8 @@ class AccountClient:
                 if response.status_code == 400 and error == "authorization_pending":
                     continue
                 if response.status_code == 400 and error == "slow_down":
-                    interval += 5
+                    delay = retry_after(response, interval + 5)
+                    interval = max(interval, delay)
                     continue
                 if error == "access_denied":
                     raise LoginError("Connection declined in the browser.")
@@ -237,6 +266,13 @@ class AccountClient:
                     break
                 self.require_success(response)
         raise LoginError("Pairing expired. Run dark login again.")
+
+
+def retry_after(response: httpx.Response, default: int) -> int:
+    try:
+        return min(30, max(1, int(response.headers["Retry-After"])))
+    except (KeyError, ValueError):
+        return default
 
 
 def register(app: typer.Typer) -> None:

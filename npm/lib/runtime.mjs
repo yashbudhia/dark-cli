@@ -178,9 +178,8 @@ export async function main(args) {
   const desktopCommand = args[0] === "desktop" && args.length > 1;
   const agentCommand = args.length === 0 || ["chat", "run"].includes(args[0]);
   if ((desktopCommand || (agentCommand && process.platform === "win32" && process.arch === "x64")) && !args.includes("--help") && !env.DARK_WINDOWS_MCP_PATH) {
-    // Respect a custom MCP path set in the caller's .env before auto-installing.
-    const code = await run(python, ["-c", "from dark_cli.config import load_environment; import os,sys; load_environment(); sys.exit(0 if os.getenv('DARK_WINDOWS_MCP_PATH') else 1)"], env);
-    if (code === 1) env.DARK_WINDOWS_MCP_PATH = await ensureDesktop(root);
+    // Python loads .env once; a custom MCP path takes precedence over this fallback.
+    env.DARK_BUNDLED_WINDOWS_MCP_PATH = await ensureDesktop(root);
   }
   const code = await run(python, ["-m", "dark_cli", ...args], env);
   if (code === 85) {

@@ -59,7 +59,7 @@ def test_device_login_pending_slow_down_and_success_never_prints_token():
             )
             == token
         )
-        assert polls == [5, 10, 20]
+        assert polls == [0, 5, 15]
         assert len(opened) == 1
         assert "ABCD-EFGH" in messages[0]
         assert token not in str(messages) and device_secret not in str(messages)
@@ -89,6 +89,48 @@ def test_cli_handles_denial_and_expiration(error):
     with pytest.raises(auth.LoginError, match="declined|expired"):
         client.login(no_browser=True, notify=lambda _: None, sleep=clock.sleep, clock=clock.now)
     client.close()
+
+
+def test_login_retries_lost_response_and_gateway_failure_without_new_pairing():
+    clock = Clock()
+    calls, messages = [], []
+    token = "test-session-" * 5
+
+    def handler(request):
+        calls.append(request.url.path)
+        if request.url.path.endswith("/code"):
+            return httpx.Response(
+                200,
+                json={
+                    "device_code": "device" * 8,
+                    "user_code": "ABCD-EFGH",
+                    "interval": 2,
+                    "expires_in": 600,
+                    "verification_uri_complete": "https://dark.example/connect?code=ABCD-EFGH",
+                },
+            )
+        polls = calls.count("/api/auth/device/token")
+        if polls == 1:
+            raise httpx.ReadTimeout("synthetic lost response")
+        if polls == 2:
+            return httpx.Response(503, headers={"Retry-After": "2"})
+        return httpx.Response(200, json={"access_token": token})
+
+    client = auth.AccountClient("https://dark.example", httpx.MockTransport(handler))
+    try:
+        assert (
+            client.login(
+                no_browser=True, notify=messages.append, sleep=clock.sleep, clock=clock.now
+            )
+            == token
+        )
+        assert calls.count("/api/auth/device/code") == 1
+        assert calls.count("/api/auth/device/token") == 3
+        assert clock.now() == 4
+        assert "retrying" in " ".join(messages)
+        assert token not in " ".join(messages)
+    finally:
+        client.close()
 
 
 def test_cli_refuses_verification_url_on_another_origin():

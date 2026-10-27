@@ -50,6 +50,11 @@ On first use, the launcher downloads a pinned, SHA-256-verified uv runtime, inst
 Python 3.12 privately, and installs the bundled Dark CLI wheel with hash-locked
 dependencies. No existing Python, uv, Git checkout, or PyPI publication is needed.
 Internet access is required for first-run setup. Later commands reuse that runtime.
+The model SDK loads on the first task, and model connections are reused between
+turns. Login keeps retrying temporary connection failures without discarding a
+browser approval.
+`/fast` selects Refuseless's lower-latency DeepSeek model for tasks; screenshot
+analysis retains the vision model. `/model` lets you choose a different model.
 The npm install itself needs no lifecycle scripts and also works with `--ignore-scripts`.
 
 Account/report commands support Windows, macOS, and glibc Linux on x64/arm64.

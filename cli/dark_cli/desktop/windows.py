@@ -37,7 +37,10 @@ def repository_root() -> Path:
 
 
 def executable() -> str:
-    configured = os.environ.get("DARK_WINDOWS_MCP_PATH", "").strip()
+    configured = (
+        os.environ.get("DARK_WINDOWS_MCP_PATH", "").strip()
+        or os.environ.get("DARK_BUNDLED_WINDOWS_MCP_PATH", "").strip()
+    )
     candidate = (
         Path(configured).expanduser()
         if configured
