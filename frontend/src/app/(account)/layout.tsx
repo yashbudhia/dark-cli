@@ -11,7 +11,10 @@ export default function AccountLayout({ children }: { children: React.ReactNode 
           <path d="M18 32h28M32 25v14" fill="none" stroke="#00ff88" strokeWidth="5" strokeLinecap="square" />
         </svg>dark<span>/</span>
       </Link>
-      <Link href="/dashboard" className="account-header-link">Your workspace</Link>
+      <nav className="account-header-nav">
+        <Link href="/billing" className="account-header-link">Billing</Link>
+        <Link href="/dashboard" className="account-header-link">Your workspace</Link>
+      </nav>
     </header>
     <main className="account-main">{children}</main>
     <footer className="account-footer">Your computer. Your session. Your evidence.</footer>

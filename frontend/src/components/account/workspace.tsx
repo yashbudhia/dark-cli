@@ -4,13 +4,16 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AccountError, accountApi, errorMessage, redirectToSignIn } from "@/lib/account-api";
-import type { Account, Device, Run } from "@/lib/account-api";
+import type { Account, Device, Balance, Run } from "@/lib/account-api";
+
+const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 export function Workspace() {
   const router = useRouter();
   const [account, setAccount] = useState<Account | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [wallet, setWallet] = useState<Balance | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -20,10 +23,12 @@ export function Workspace() {
     let active = true;
     async function load() {
       try {
-        const [user, connected, records] = await Promise.all([
+        const [user, connected, records, current] = await Promise.all([
           accountApi<Account>("/auth/me"), accountApi<Device[]>("/auth/devices"), accountApi<Run[]>("/runs"),
+          // Billing is optional; a payments outage must not hide the workspace.
+          accountApi<Balance>("/billing/status").catch(() => null),
         ]);
-        if (active) { setAccount(user); setDevices(connected); setRuns(records); }
+        if (active) { setAccount(user); setDevices(connected); setRuns(records); setWallet(current); }
       } catch (error) {
         if (!active) return;
         if (error instanceof AccountError && error.status === 401) redirectToSignIn();
@@ -72,6 +77,9 @@ export function Workspace() {
     {loading ? <p role="status">Loading workspace…</p> : account && <>
       <section className="workspace-connect"><div><h2>Connect your computer.</h2><p>Run this in your terminal, then approve the pairing code in your browser.</p><code>$ dark login</code></div>
         <Link className="button" href="/connect">Enter pairing code</Link></section>
+      {wallet && <section className="workspace-plan"><div><span className="workspace-status">CREDITS</span>
+        <p>{money(wallet.balance_cents)} available{wallet.balance_cents <= wallet.trial_cents ? " · recharge $10 and get $5 free." : "."}</p></div>
+        <Link className="button button-secondary" href="/billing">Add credits</Link></section>}
       <section className="workspace-section"><div className="workspace-section-heading"><h2>Connected computers</h2><span>{devices.length}</span></div>
         {devices.length ? <ul className="workspace-list">{devices.map(device => <li key={device.id}>
           <div><strong>{device.name}</strong><p>Connected {new Date(device.created_at).toLocaleDateString()} · Expires {new Date(device.expires_at).toLocaleDateString()}</p></div>

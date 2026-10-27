@@ -64,12 +64,16 @@ export type Run = {
   finished_at: string | null; kind: "scan" | "desktop"; desktop_report: DesktopReport | null;
 };
 
+export type Pack = { id: string; price: number; bonus: number; credit: number; currency: string };
+export type Balance = { balance_cents: number; currency: string; trial_cents: number };
+export type Order = { key_id: string; order_id: string; amount: number; currency: string; name: string; email: string };
+
 export function loginDestination(): string {
   const requested = new URLSearchParams(window.location.search).get("next") || "/dashboard";
   // Only account destinations are accepted, including a CLI code carried through sign-in.
   try {
     const target = new URL(requested, window.location.origin);
-    const allowed = ["/dashboard", "/connect"].includes(target.pathname)
+    const allowed = ["/dashboard", "/connect", "/billing"].includes(target.pathname)
       || /^\/dashboard\/runs\/[a-zA-Z0-9_-]{1,80}$/.test(target.pathname);
     if (target.origin === window.location.origin && allowed) {
       return target.pathname + target.search;

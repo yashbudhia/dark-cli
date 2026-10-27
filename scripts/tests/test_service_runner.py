@@ -185,6 +185,9 @@ def test_all_email_provider_secrets_are_excluded_from_frontend_and_build(
     executable.parent.mkdir(parents=True)
     executable.touch()
     secret_keys = (
+        "RAZORPAY_KEY_ID",
+        "RAZORPAY_KEY_SECRET",
+        "RAZORPAY_WEBHOOK_SECRET",
         "MONGODB_URI",
         "DARK_AUTH_SECRET",
         "DARK_EMAIL_FROM",

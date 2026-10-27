@@ -11,6 +11,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from .auth import AuthError, AuthService
 from .auth_routes import Principal, Service, router
+from .billing import router as billing_router
 from .email import make_mailer
 from .models import DesktopReport, Finding, RefusalEvent, Run, RunStatus
 from .settings import Settings
@@ -50,6 +51,7 @@ def create_app(
     application.state.settings = config
     application.state.auth = None
     application.include_router(router)
+    application.include_router(billing_router)
 
     @application.middleware("http")
     async def private_responses(request: Request, call_next):

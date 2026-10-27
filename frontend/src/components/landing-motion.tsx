@@ -34,7 +34,7 @@ const scrollEffects: MotionSpec[] = [
   { selector: ".faq-list", y: 16, duration: 800 },
   { selector: ".final-cta h2", y: 40, delay: 200 },
   { selector: ".final-cta .button", y: 24, delay: 400, duration: 1500 },
-  { selector: ".final-dashboard", y: 40, delay: 300 },
+  { selector: ".final-terminal", y: 40, delay: 300 },
 ];
 
 export function useLandingMotion() {
@@ -103,7 +103,8 @@ export function useLandingMotion() {
     for (const [selector, y, delay] of [
       [".hero-eyebrow", 24, 100],
       [".hero-copy > .button", 24, 400],
-      [".hero-dashboard", 40, 300],
+      [".hero-stage", 40, 300],
+      [".hero-caption", 16, 600],
     ] as const) {
       const element = container.querySelector(selector);
       if (element) play(element, y, delay, 1000);

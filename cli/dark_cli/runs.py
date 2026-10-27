@@ -13,6 +13,7 @@ from typing import Literal
 import typer
 from pydantic import BaseModel, Field, StrictBool, ValidationError
 
+from . import ui
 from .auth import AccountClient, Credentials, LoginError
 
 app = typer.Typer(help="Upload, list, and inspect saved desktop reports.", no_args_is_help=True)
@@ -81,9 +82,10 @@ def list_runs(
     try:
         client = AccountClient(server)
         token = connected_token(client)
-        rows = client.require_success(
-            client.request("GET", "/api/runs", token=token), expect_list=True
-        )
+        with ui.tool_call("runs", "list"):
+            rows = client.require_success(
+                client.request("GET", "/api/runs", token=token), expect_list=True
+            )
         try:
             records = [SavedRun.model_validate(row) for row in rows]
         except ValidationError as exc:
@@ -120,7 +122,10 @@ def show(
             raise LoginError("Invalid run ID. Use an ID returned by dark runs list.")
         client = AccountClient(server)
         token = connected_token(client)
-        data = client.require_success(client.request("GET", f"/api/runs/{run_id}", token=token))
+        with ui.tool_call("runs", f"show {run_id}"):
+            data = client.require_success(
+                client.request("GET", f"/api/runs/{run_id}", token=token)
+            )
         try:
             record = SavedRun.model_validate(data)
         except ValidationError as exc:
@@ -203,10 +208,11 @@ def upload(
         token = Credentials(client.server).get()
         if not token:
             raise LoginError("Not connected. Run dark login before uploading.")
-        response = client.request(
-            "PUT", f"/api/runs/import/{fingerprint}", token=token, json=payload
-        )
-        result = client.require_success(response)
+        with ui.tool_call("runs", "upload"):
+            response = client.request(
+                "PUT", f"/api/runs/import/{fingerprint}", token=token, json=payload
+            )
+            result = client.require_success(response)
         expected_id = f"desktop_{fingerprint}"
         if result.get("id") != expected_id:
             raise LoginError("The server returned an unexpected report ID.")

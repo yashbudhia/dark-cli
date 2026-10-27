@@ -23,6 +23,9 @@ class Settings:
     email_from: str = ""
     resend_api_key: str = ""
     email_provider: str = ""
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
 
     @classmethod
     def from_env(cls, env_file: str | Path | None = None) -> Settings:
@@ -45,7 +48,14 @@ class Settings:
             email_from=value("DARK_EMAIL_FROM"),
             resend_api_key=value("RESEND_API_KEY"),
             email_provider=value("DARK_EMAIL_PROVIDER").lower(),
+            razorpay_key_id=value("RAZORPAY_KEY_ID"),
+            razorpay_key_secret=value("RAZORPAY_KEY_SECRET"),
+            razorpay_webhook_secret=value("RAZORPAY_WEBHOOK_SECRET"),
         )
+
+    @property
+    def billing_configured(self) -> bool:
+        return bool(self.razorpay_key_id and self.razorpay_key_secret)
 
     @property
     def configured(self) -> bool:

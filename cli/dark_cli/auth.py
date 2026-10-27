@@ -14,6 +14,7 @@ import keyring
 import typer
 from keyring.errors import KeyringError
 
+from . import ui
 from .config import ConfigError, configured_server, remember_server
 
 
@@ -205,33 +206,36 @@ class AccountClient:
                     notify("Could not open the browser. Open the URL above manually.")
             except (webbrowser.Error, OSError):
                 notify("Could not open the browser. Open the URL above manually.")
-        while clock() < deadline:
-            sleep(min(interval, max(0, deadline - clock())))
-            if clock() >= deadline:
-                break
-            response = self.request(
-                "POST", "/api/auth/device/token", json={"device_code": device_code}
-            )
-            if response.is_success:
-                payload = self.require_success(response)
-                token = payload.get("access_token")
-                if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{32,256}", token):
-                    raise LoginError("Dark server did not return a valid session.")
-                return token
-            try:
-                error = response.json().get("error")
-            except (ValueError, AttributeError):
-                error = None
-            if response.status_code == 400 and error == "authorization_pending":
-                continue
-            if response.status_code == 400 and error == "slow_down":
-                interval += 5
-                continue
-            if error == "access_denied":
-                raise LoginError("Connection declined in the browser.")
-            if error == "expired_token":
-                break
-            self.require_success(response)
+        with ui.progress(f"Waiting for approval of {display_code} in your browser"):
+            while clock() < deadline:
+                sleep(min(interval, max(0, deadline - clock())))
+                if clock() >= deadline:
+                    break
+                response = self.request(
+                    "POST", "/api/auth/device/token", json={"device_code": device_code}
+                )
+                if response.is_success:
+                    payload = self.require_success(response)
+                    token = payload.get("access_token")
+                    if not isinstance(token, str) or not re.fullmatch(
+                        r"[A-Za-z0-9_-]{32,256}", token
+                    ):
+                        raise LoginError("Dark server did not return a valid session.")
+                    return token
+                try:
+                    error = response.json().get("error")
+                except (ValueError, AttributeError):
+                    error = None
+                if response.status_code == 400 and error == "authorization_pending":
+                    continue
+                if response.status_code == 400 and error == "slow_down":
+                    interval += 5
+                    continue
+                if error == "access_denied":
+                    raise LoginError("Connection declined in the browser.")
+                if error == "expired_token":
+                    break
+                self.require_success(response)
         raise LoginError("Pairing expired. Run dark login again.")
 
 

@@ -66,6 +66,8 @@ class AuthService:
         self.db.sessions.create_index("user_id")
         self.db.device_codes.create_index("user_code_hash", unique=True)
         self.db.runs.create_index([("owner_id", 1), ("id", 1)], unique=True)
+        self.db.payments.create_index("user_id")
+        self.db.credit_ledger.create_index("user_id")
         for name in ("findings", "refusals"):
             self.db[name].create_index(
                 [("owner_id", 1), ("run_id", 1), ("id", 1)], unique=True

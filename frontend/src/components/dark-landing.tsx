@@ -3,13 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { BandsBackground } from "./bands-background";
+import {
+  eventRecords, exerciseApply, exercisePreview, help, negativeScenario, probe, runDirectory, snapshotControls,
+} from "./cli-captures";
 import { Icon, type IconName } from "./icon";
 import { MotionText, useLandingMotion } from "./landing-motion";
+import { Terminal, TerminalBody, TerminalFrame, at, timeline, useReplay } from "./terminal";
 
-const repository = "https://github.com/yashbudhia/dark-cli";
-const guide = `${repository}#native-windows-milestone`;
+const guide = "https://www.npmjs.com/package/dark-agent-cli";
 const navItems = [
   ["Features", "features-overview"],
   ["Use cases", "use-cases"],
@@ -33,7 +36,7 @@ function Button({ children, href = guide, arrow = false, secondary = false }: {
 
 function Brand() {
   return <a className="brand brand-wordmark" href="#hero" aria-label="Dark home">
-    <Image className="brand-mark" src="/dark-mark.svg" width={38} height={38} alt="" priority />
+    <Image className="brand-mark" src="/dark-mark.svg" width={38} height={38} alt="" loading="eager" />
     <span>dark<span className="accent">/</span></span>
   </a>;
 }
@@ -77,49 +80,82 @@ function SectionHeading({ label, children }: { label: string; children: ReactNod
   return <div className="section-heading"><span className="section-label">[ {label} ]</span><h2>{children}</h2></div>;
 }
 
-const capabilityLabels = ["WINDOWS UI", "SNAPSHOT", "SCREENSHOT", "SCENARIO", "EVENT LOG", "REPORT"];
+function Screenshot({ src, alt, caption }: { src: string; alt: string; caption: string }) {
+  return <figure className="evidence-card">
+    <div className="evidence-head"><span>screenshot.png</span><span>500 × 280</span></div>
+    <Image src={src} width={500} height={280} alt={alt} unoptimized />
+    <figcaption>{caption}</figcaption>
+  </figure>;
+}
+
+// The hero replays the real failing exercise, then shows the evidence it left behind.
+function HeroStage() {
+  const { ref, state, run, restart } = useReplay<HTMLDivElement>();
+  const start = 0.9;
+  const { times } = timeline(exerciseApply, start);
+  const reportAt = times[exerciseApply.findIndex(line => line.kind === "out")];
+  return <div ref={ref} className="replay hero-stage" data-replay={state}>
+    <TerminalFrame title="PowerShell" className="terminal-wide hero-terminal"
+      action={<button className="t-replay" type="button" onClick={restart}>↻ Replay</button>}>
+      <TerminalBody key={run} lines={exerciseApply} start={start}
+        label="Terminal: dark desktop exercise runs twelve tool calls against the Dark Desktop Fixture and reports status failed. Expected Rejected: quantity must be nonnegative; observed Saved quantity: -2. Exit code 1." />
+    </TerminalFrame>
+    <div className="hero-evidence" key={run}>
+      <div className="rp" style={at(reportAt + 0.2)}>
+        <Screenshot src="/dark/evidence/probe-saved-negative.png"
+          alt="The Dark Desktop Fixture window after the exercise: the quantity field holds -2 and the status reads Saved quantity: -2."
+          caption="dark desktop probe --expect 'Saved quantity: -2' --screenshot" />
+      </div>
+      <div className="assertion-card rp" style={at(reportAt + 0.5)}>
+        <div className="assertion-head"><span>report.json · step 5</span><span className="fail-badge">FAILED</span></div>
+        <dl>
+          <div><dt>expected</dt><dd>Rejected: quantity must be nonnegative</dd></div>
+          <div><dt>observed</dt><dd className="observed">Saved quantity: -2</dd></div>
+        </dl>
+        <p><code>&quot;verified_finding&quot;: false</code> A failed check to investigate, not yet a finding.</p>
+      </div>
+    </div>
+  </div>;
+}
+
+const evidenceFiles = ["snapshot.json", "screenshot.png", "events.jsonl", "scenario.json", "report.json", "server.json"];
 
 function CapabilityReel() {
-  return <section className="capability-section" aria-label="Dark inputs and evidence: Windows UI, snapshots, screenshots, scenarios, event logs, and reports">
-    <p>From the target window to the saved evidence</p>
-    <div className="capability-grid" aria-hidden="true">{capabilityLabels.map((label, index) =>
+  return <section className="capability-section" aria-label={`Files a run saves under .dark/runs: ${evidenceFiles.join(", ")}`}>
+    <p>What a run leaves behind in <code>.dark/runs/</code></p>
+    <div className="capability-grid" aria-hidden="true">{evidenceFiles.map((label, index) =>
       <div className="capability-slot" key={label}><div className="capability-track" style={{ animationDelay: `${index * 0.1}s` }}>
-        {[label, capabilityLabels[(index + 1) % capabilityLabels.length], capabilityLabels[(index + 2) % capabilityLabels.length], label]
+        {[label, evidenceFiles[(index + 1) % evidenceFiles.length], evidenceFiles[(index + 2) % evidenceFiles.length], label]
           .map((frame, frameIndex) => <div className="capability-frame" key={`${frame}-${frameIndex}`}><span className="capability-symbol" />{frame}</div>)}
       </div></div>,
     )}</div>
   </section>;
 }
 
-function EvidencePreview({ compact = false }: { compact?: boolean }) {
-  return <div className={`evidence-preview${compact ? " evidence-preview-compact" : ""}`} role="img"
-    aria-label="Illustration of a Dark desktop probe report with a passed Ready check and saved evidence">
-    <div className="preview-top"><span className="preview-dots" aria-hidden="true"><i /><i /><i /></span><span>dark / desktop probe</span><span className="preview-mode">LOCAL SESSION</span></div>
-    <div className="preview-layout">
-      <div className="preview-sidebar">
-        <span className="preview-overline">TARGET WINDOW</span>
-        <strong>Dark Desktop Fixture</strong>
-        <span className="preview-overline preview-space">COMMAND</span>
-        <code>dark desktop probe</code>
-        <span className="preview-nav-active">01&nbsp; Snapshot</span>
-        <span>02&nbsp; Checks</span>
-        <span>03&nbsp; Evidence</span>
-      </div>
-      <div className="preview-main">
-        <div className="preview-head"><div><span className="preview-overline">INSPECTION REPORT</span><h3>Inventory window</h3></div><span className="preview-badge">OBSERVED</span></div>
-        <p className="preview-subtitle">Selected by exact window title · read-only probe</p>
-        <div className="preview-check"><span className="preview-check-icon">✓</span><div><strong>Expected text: Ready</strong><small>Found in accessibility snapshot</small></div><span className="preview-pass">PASS</span></div>
-        <div className="preview-log"><span className="preview-overline">SAVED EVIDENCE</span><code>snapshot.json</code><code>screenshot.png</code><code>events.jsonl</code><code>report.md</code></div>
-        <div className="preview-foot">.dark/runs/<span className="cursor">_</span></div>
-      </div>
-    </div>
+function formatBytes(bytes: number) {
+  return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function RunDirectory() {
+  const { ref, state } = useReplay<HTMLDivElement>();
+  return <div ref={ref} className="replay file-panel" data-replay={state}
+    aria-label={`Run directory listing: ${runDirectory.files.map(([name]) => name).join(", ")}`} role="img">
+    <div className="file-head"><span>{runDirectory.path}\</span></div>
+    <ul className="file-tree">{runDirectory.files.map(([name, size], index) =>
+      <li className="rp" key={name} style={at(0.3 + index * 0.12)}>
+        <span><span className="t-dim">{index === runDirectory.files.length - 1 ? "└── " : "├── "}</span>{name}</span><span className="t-dim">{formatBytes(size)}</span>
+      </li>)}
+    </ul>
   </div>;
 }
 
 const features = [
-  { number: "0.1", name: "Desktop inspection", title: "See what the app exposes", description: "Select a Windows app by its exact title. Capture its accessibility snapshot and optional screenshot without clicking or typing.", command: "dark desktop probe --title 'My App' --screenshot", lines: ["> window matched", "> controls captured", "> evidence saved"] },
-  { number: "0.2", name: "Explicit scenarios", title: "Test one behavior at a time", description: "Run a reviewed scenario with click, type, and exact text assertions. Preview its steps before applying them to the target app.", command: "dark desktop exercise scenario.json", lines: ["> preview: 4 steps", "> reset: Ready", "> assertion: pass"] },
-  { number: "0.3", name: "Saved evidence", title: "Keep a trail you can inspect", description: "Each probe writes a report, snapshot, event log, and optional image under a local run directory. A passed check stays distinct from a verified finding.", command: ".dark/runs/", lines: ["├── snapshot.json", "├── events.jsonl", "└── report.md"] },
+  { number: "0.1", name: "Desktop inspection", title: "See what the app exposes", description: "Select a Windows app by its exact title. Capture its accessibility snapshot and optional screenshot without clicking or typing.",
+    visual: <Terminal lines={probe} label="Terminal: dark desktop probe connects, lists windows, snapshots and screenshots the fixture, then reports status passed for the expected text Ready." /> },
+  { number: "0.2", name: "Explicit scenarios", title: "Test one behavior at a time", description: "Run a reviewed scenario with click, type, and exact text assertions. Without --apply, Dark validates and previews it and nothing is executed.",
+    visual: <Terminal lines={exercisePreview} label="Terminal: dark desktop exercise without --apply prints status preview and executed false." /> },
+  { number: "0.3", name: "Saved evidence", title: "Keep a trail you can inspect", description: "Each run writes a report, event log, and the snapshot or screenshot it took under a local run directory. A passed check stays distinct from a verified finding.",
+    visual: <RunDirectory /> },
 ];
 
 function Features() {
@@ -127,22 +163,72 @@ function Features() {
     <SectionHeading label="FEATURES">Inspect the app. Run the check. Keep the evidence.</SectionHeading>
     <div className="three-column feature-grid">{features.map((feature) => <article className="numbered-card feature-card" key={feature.number}>
       <span className="number-tag">{feature.number}</span><div className="offset-card"><div className="card-front">
-        <h3>{feature.name}</h3><div className="terminal-illustration"><p className="accent">$ {feature.command}</p><div className="terminal-output">{feature.lines.map(line => <p key={line}>{line}</p>)}</div><p className="terminal-running accent">&gt; complete<span className="cursor">_</span></p></div>
+        <h3>{feature.name}</h3>{feature.visual}
         <div className="feature-copy"><h4>{feature.title}</h4><p>{feature.description}</p></div>
       </div></div>
     </article>)}</div>
   </section>;
 }
 
+function SnapshotVisual() {
+  return <>
+    <div className="rp" style={at(0)}>
+      <Screenshot src="/dark/evidence/probe-ready.png" alt="The Dark Desktop Fixture window before the exercise: quantity 1 and status Ready."
+        caption="dark desktop probe --title 'Dark Desktop Fixture' --expect Ready --screenshot" />
+    </div>
+    <div className="file-panel rp" style={at(0.15)}>
+      <div className="file-head"><span>snapshot.json</span><span>controls</span></div>
+      <ul className="control-tree">{snapshotControls.map((control, index) =>
+        <li className={`rp${control.expected ? " is-expected" : ""}`} key={control.name} style={at(0.3 + index * 0.08)}>
+          <span className="t-dim">{control.type}</span><span>{control.id || "·"}</span>
+          <span className="control-name">&quot;{control.name}&quot;{control.value && <span className="t-dim"> value &quot;{control.value}&quot;</span>}</span>
+          {control.expected && <span className="t-ok">✓ expect</span>}
+        </li>)}
+      </ul>
+    </div>
+  </>;
+}
+
+function ScenarioVisual() {
+  return <div className="file-panel rp" style={at(0)}>
+    <div className="file-head"><span>examples\desktop\negative.json</span><span>5 steps</span></div>
+    <pre className="file-code">{negativeScenario.split("\n").map((line, index) => {
+      const text = line.trimStart();
+      // Wrapped JSON lines hang under their own indentation instead of the left edge.
+      return <span key={index} style={{ "--indent": `${line.length - text.length}ch` } as CSSProperties}>{text}</span>;
+    })}</pre>
+  </div>;
+}
+
+function EventsVisual() {
+  return <div className="file-panel rp" style={at(0)}>
+    <div className="file-head"><span>events.jsonl</span><span>24 records</span></div>
+    <ul className="event-list">{eventRecords.map((record, index) =>
+      <li key={record.seq} className={`rp${record.passed === false ? " is-failed" : ""}`} style={at(0.2 + index * 0.1)}>
+        <span className="t-dim">{String(record.seq).padStart(2, "0")}</span><span className="event-kind">{record.kind}</span>
+        <span className="event-detail">{record.detail}</span>
+        {record.passed !== undefined && <span className={record.passed ? "t-ok" : "t-fail"}>{record.passed ? "✓ pass" : "✗ fail"}</span>}
+      </li>)}
+    </ul>
+  </div>;
+}
+
 const useCases = [
-  { label: "Inspect a window", icon: "eye" as IconName, title: "Start with what the app actually shows.", description: "List visible windows, choose one exact title, and save a read-only probe. Use an expectation when you need to check displayed text.", command: "dark desktop probe --title 'My App' --expect 'Ready'", checks: ["Accessibility snapshot", "Optional screenshot", "Passed, failed, or infrastructure result"] },
-  { label: "Exercise a flow", icon: "blocks" as IconName, title: "Make a workflow repeatable.", description: "Define a reset, actions, and an assertion in JSON. Dark validates and previews the scenario, then executes it only when you choose --apply.", command: "dark desktop exercise scenario.json --apply", checks: ["Click, type, and assert steps", "Exact control rediscovery", "Stop on a failed assertion"] },
-  { label: "Review evidence", icon: "flask" as IconName, title: "Trace what happened after the run.", description: "Open the saved report and event log to inspect the observed controls, steps, checks, and errors. A failed check needs investigation before it becomes a finding.", command: ".dark/runs/<run-id>/report.md", checks: ["Append-only event log", "Saved snapshot and report", "Optional screenshot"] },
+  { label: "Inspect a window", icon: "eye" as IconName, title: "Start with what the app actually shows.", description: "List visible windows, choose one exact title, and save a read-only probe. Use an expectation when you need to check displayed text.", command: "dark desktop probe --title 'My App' --expect 'Ready'", checks: ["Accessibility snapshot", "Optional screenshot", "Passed, failed, or infrastructure result"], visual: <SnapshotVisual /> },
+  { label: "Exercise a flow", icon: "play" as IconName, title: "Make a workflow repeatable.", description: "Define a reset, actions, and an assertion in JSON. Dark validates and previews the scenario, then executes it only when you choose --apply.", command: "dark desktop exercise scenario.json --apply", checks: ["Click, type, and assert steps", "Exact control rediscovery", "Stop on a failed assertion"], visual: <ScenarioVisual /> },
+  { label: "Review evidence", icon: "file" as IconName, title: "Trace what happened after the run.", description: "Open the saved report and event log to inspect the observed controls, steps, checks, and errors. A failed check needs investigation before it becomes a finding.", command: ".dark/runs/<run-id>/report.json", checks: ["Append-only event log", "Saved snapshot and report", "Optional screenshot"], visual: <EventsVisual /> },
 ];
+
+function CaseVisual({ immediate, children }: { immediate: boolean; children: ReactNode }) {
+  const { ref, state } = useReplay<HTMLDivElement>(immediate);
+  return <div ref={ref} className="replay case-visual" data-replay={state}>{children}</div>;
+}
 
 function UseCases() {
   const [active, setActive] = useState(0);
+  const [interacted, setInteracted] = useState(false);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  function select(index: number) { setActive(index); setInteracted(true); }
   function keyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     let next = index;
     if (event.key === "ArrowRight") next = (index + 1) % useCases.length;
@@ -150,7 +236,7 @@ function UseCases() {
     else if (event.key === "Home") next = 0;
     else if (event.key === "End") next = useCases.length - 1;
     else return;
-    event.preventDefault(); setActive(next); tabs.current[next]?.focus();
+    event.preventDefault(); select(next); tabs.current[next]?.focus();
   }
   const item = useCases[active];
   return <section className="section" id="use-cases">
@@ -159,40 +245,42 @@ function UseCases() {
       {useCases.map((entry, index) => <button key={entry.label} ref={element => { tabs.current[index] = element; }}
         className={`tab${active === index ? " active" : ""}`} id={`case-tab-${index}`} role="tab"
         aria-selected={active === index} aria-controls="case-panel" tabIndex={active === index ? 0 : -1}
-        onClick={() => setActive(index)} onKeyDown={event => keyDown(event, index)}>
+        onClick={() => select(index)} onKeyDown={event => keyDown(event, index)}>
         <Icon name={entry.icon} />{entry.label}
       </button>)}
     </div><div className="use-case-panel" id="case-panel" role="tabpanel" aria-labelledby={`case-tab-${active}`} tabIndex={0}>
-      <div className="use-case-copy" key={active}><div><h3>{item.title}</h3><p>{item.description}</p></div>
-        <code className="command-sample">$ {item.command}</code>
+      <div className="use-case-copy" key={`copy-${active}`}><div><h3>{item.title}</h3><p>{item.description}</p></div>
+        <code className="command-sample">PS&gt; {item.command}</code>
         <ul className="check-list">{item.checks.map(check => <li key={check}><Icon name="check" />{check}</li>)}</ul>
         <Button href={guide} arrow>Read the desktop guide</Button>
-      </div><div className="use-case-image"><EvidencePreview compact /></div>
+      </div><CaseVisual key={`visual-${active}`} immediate={interacted}>{item.visual}</CaseVisual>
     </div></div>
   </section>;
 }
 
 const steps = [
-  { number: "1", title: "Prepare a local target", description: "Set up the Windows adapter, run the doctor check, and choose an app you are authorized to test." },
-  { number: "2", title: "Probe or exercise", description: "Capture a read-only snapshot, or preview a scenario and run its explicit steps with --apply." },
-  { number: "3", title: "Inspect the result", description: "Read the saved report and evidence. Reset the app before repeating a failure." },
+  { number: "1", title: "Prepare a local target", command: "dark desktop doctor", description: "Set up the Windows adapter, run the doctor check, and choose an app you are authorized to test." },
+  { number: "2", title: "Probe or exercise", command: "dark desktop exercise scenario.json --apply", description: "Capture a read-only snapshot, or preview a scenario and run its explicit steps with --apply." },
+  { number: "3", title: "Inspect the result", command: "dark runs upload .dark\\runs\\<run> --open", description: "Read the saved report and evidence locally. Upload its summary and assertions to your account when you want to share it." },
 ];
 
 function HowItWorks() {
   return <section className="section" id="how-it-works"><SectionHeading label="HOW IT WORKS">A deliberate path from target to evidence.</SectionHeading>
     <div className="three-column steps-grid">{steps.map(step => <article className="numbered-card step-card" key={step.number}>
-      <span className="number-tag step-number">{step.number}</span><div className="offset-card"><div className="card-front"><h3>{step.title}</h3><p>{step.description}</p></div></div>
+      <span className="number-tag step-number">{step.number}</span><div className="offset-card"><div className="card-front">
+        <code className="step-command">PS&gt; {step.command}</code><h3>{step.title}</h3><p>{step.description}</p>
+      </div></div>
     </article>)}</div>
   </section>;
 }
 
 const principles = [
   { icon: "eye" as IconName, title: "Observe first", description: "A probe reads the selected app. It does not click or type." },
-  { icon: "shield" as IconName, title: "Exact target selection", description: "Use a unique window title so the run does not drift into another app." },
-  { icon: "branch" as IconName, title: "Preview before apply", description: "Check scenario steps before any mutating exercise." },
+  { icon: "target" as IconName, title: "Exact target selection", description: "Use a unique window title so the run does not drift into another app." },
+  { icon: "preview" as IconName, title: "Preview before apply", description: "Check scenario steps before any mutating exercise." },
   { icon: "check" as IconName, title: "Clear assertions", description: "Compare selected control text exactly, with an optional contains match." },
-  { icon: "hourglass" as IconName, title: "No blind retries", description: "A timed-out mutation is not automatically repeated when its outcome is unknown." },
-  { icon: "flask" as IconName, title: "Evidence over labels", description: "A passing check is recorded as a check, not presented as a vulnerability." },
+  { icon: "pause" as IconName, title: "No blind retries", description: "A timed-out mutation is not automatically repeated when its outcome is unknown." },
+  { icon: "file" as IconName, title: "Evidence over labels", description: "A passing check is recorded as a check, not presented as a vulnerability." },
 ];
 
 function Principles() {
@@ -203,7 +291,7 @@ function Principles() {
 
 function Status() {
   return <section className="section status-section" id="status"><SectionHeading label="PROJECT STATUS">What works today, and what comes next.</SectionHeading>
-    <div className="status-grid"><article className="status-card"><span className="tiny-badge">AVAILABLE NOW</span><h3>Windows desktop testing</h3><p>Doctor, window discovery, read-only probes, explicit scenarios, saved evidence, and a disposable WinForms fixture are implemented and tested.</p></article>
+    <div className="status-grid"><article className="status-card"><span className="tiny-badge">AVAILABLE NOW</span><h3>Windows desktop testing</h3><p>Doctor, window discovery, read-only probes, explicit scenarios, saved evidence, and a disposable WinForms fixture are implemented and tested, along with account sign-in and report upload.</p></article>
     <article className="status-card"><span className="tiny-badge status-badge-muted">IN PROGRESS</span><h3>Exploratory scanning</h3><p>Natural-language scans, CTF mode, model-guided control selection, and automated verified-finding export remain on the roadmap.</p></article></div>
   </section>;
 }
@@ -214,7 +302,7 @@ const faqs = [
   { title: "Does a passed check mean Dark found a vulnerability?", text: "No. The report separates observations, passed checks, failed checks, and infrastructure errors. A suspected security issue needs a repeatable failure and supporting evidence." },
   { title: "Do I need an API key?", text: "No key is required for probes or explicit scenario exercises. The optional Jev decision preview uses a configured TypeSafe API key; its suggested action is recorded, not executed." },
   { title: "Is autonomous scanning ready?", text: "Not yet. Natural-language exploratory scanning and CTF mode are scaffolds. The next milestone is model-guided control selection followed by fresh-state replay." },
-  { title: "Where are reports saved?", text: "Each local run writes its report, accessibility snapshot, and event log under .dark/runs/. A screenshot is saved when requested." },
+  { title: "Where are reports saved?", text: "Each local run writes report.json, an append-only events.jsonl, and its snapshot or scenario under .dark/runs/. Uploading sends only the report summary and assertions; snapshots, screenshots, and event logs stay local." },
 ];
 
 function FAQ() {
@@ -226,7 +314,7 @@ function FAQ() {
 function Footer() {
   return <footer className="footer section"><div className="footer-brand"><Brand /><p>Inspect software you are authorized to test.<br />Keep the evidence close.</p></div>
     <div className="footer-links"><div><h3>Explore</h3>{navItems.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}</div>
-      <div><h3>Project</h3><a href={repository} target="_blank" rel="noreferrer">Source code</a><a href={guide} target="_blank" rel="noreferrer">Desktop guide</a></div></div>
+      <div><h3>Project</h3><a href={guide} target="_blank" rel="noreferrer">Install from npm</a><a href={`${guide}#configuration`} target="_blank" rel="noreferrer">CLI configuration</a></div></div>
   </footer>;
 }
 
@@ -235,19 +323,24 @@ export function DarkLanding() {
   return <><a className="skip-link" href="#main">Skip to content</a><Navigation />
     <main id="main" ref={motionRoot}>
       <section className="hero" id="hero"><BandsBackground /><div className="hero-inner">
-        <div className="hero-copy"><span className="hero-eyebrow">OPEN SOURCE / SECURITY TESTING</span>
+        <div className="hero-copy"><span className="hero-eyebrow">WINDOWS / DESKTOP TESTING</span>
           <h1><MotionText text="Test the behavior." /><br className="desktop-break" /> <MotionText text="Keep the proof." /></h1>
           <p><MotionText text="Dark inspects native Windows apps, runs explicit test scenarios, and saves the evidence you need to investigate a failure." /></p>
           <Button href="/login" arrow>Get started with Dark</Button>
-        </div><div className="hero-dashboard"><EvidencePreview /></div>
+        </div>
+        <HeroStage />
+        <p className="hero-caption">Recorded output from dark 0.1.0 against the bundled test app, which deliberately accepts negative quantities.</p>
       </div></section>
       <CapabilityReel />
       <Features /><UseCases /><HowItWorks /><Principles /><Status /><FAQ />
       <section className="final-cta"><div className="final-cta-copy"><span className="section-label">[ START HERE ]</span>
         <h2><MotionText text="Find the behavior. Save the evidence." /></h2>
-        <p>Set up the desktop adapter, choose an authorized target, and run your first probe.</p>
-        <Button arrow>Read the setup guide</Button>
-      </div><div className="final-dashboard"><EvidencePreview compact /></div></section>
+        <p>Install the CLI, set up the desktop adapter, and run your first probe against an app you are authorized to test.</p>
+        <code className="command-sample">PS&gt; npm install -g dark-agent-cli</code>
+        <div className="final-actions"><Button arrow>Read the setup guide</Button><Button href="/login" secondary>Sign in</Button></div>
+      </div><div className="final-terminal">
+        <Terminal lines={help} wide label="Terminal: dark --help lists the commands doctor, login, whoami, logout, scan, ctf, desktop and runs." />
+      </div></section>
     </main><Footer /><div className="noise-overlay" aria-hidden="true" />
   </>;
 }

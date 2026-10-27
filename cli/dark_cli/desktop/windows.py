@@ -18,6 +18,7 @@ from typing import Any
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from .. import ui
 from .evidence import Evidence
 
 SERVER_VERSION = "1.3.28"
@@ -145,7 +146,10 @@ class WindowsDesktop:
             self.evidence.event("tool_call", tool=name, arguments=arguments)
         try:
             # Never retry mutations: a timeout can occur after the action committed.
-            result = await asyncio.wait_for(self.session.call_tool(name, arguments), timeout=30)
+            with ui.tool_call(name, str(arguments.get("action", ""))):
+                result = await asyncio.wait_for(
+                    self.session.call_tool(name, arguments), timeout=30
+                )
             data = unpack(result)
         except TimeoutError as exc:
             if self.evidence:
@@ -192,16 +196,20 @@ async def connect(evidence: Evidence | None = None) -> AsyncIterator[WindowsDesk
         raise DesktopError("The desktop adapter requires Windows 10/11")
     params = StdioServerParameters(command=executable(), args=[])
     with open(os.devnull, "w") as errlog:
-        async with stdio_client(params, errlog=errlog) as (read, write):
-            async with ClientSession(read, write) as session:
-                info = await asyncio.wait_for(session.initialize(), timeout=20)
-                listing = await asyncio.wait_for(session.list_tools(), timeout=20)
-                names = {tool.name for tool in listing.tools}
-                missing = REQUIRED_TOOLS - names
-                if missing:
-                    raise DesktopError(
-                        "Incompatible desktop server; missing tools: " + ", ".join(sorted(missing))
-                    )
-                if evidence:
-                    evidence.save("server.json", info.serverInfo.model_dump(mode="json"))
-                yield WindowsDesktop(session, names, evidence)
+        # One spinner spans the whole session; each tool call swaps its label.
+        with ui.progress("Working"):
+            async with stdio_client(params, errlog=errlog) as (read, write):
+                async with ClientSession(read, write) as session:
+                    with ui.tool_call("connect", "Windows desktop server"):
+                        info = await asyncio.wait_for(session.initialize(), timeout=20)
+                        listing = await asyncio.wait_for(session.list_tools(), timeout=20)
+                    names = {tool.name for tool in listing.tools}
+                    missing = REQUIRED_TOOLS - names
+                    if missing:
+                        raise DesktopError(
+                            "Incompatible desktop server; missing tools: "
+                            + ", ".join(sorted(missing))
+                        )
+                    if evidence:
+                        evidence.save("server.json", info.serverInfo.model_dump(mode="json"))
+                    yield WindowsDesktop(session, names, evidence)

@@ -17,17 +17,20 @@ npm run dev
 ```
 
 Run `npm run lint`, `npm run typecheck`, and `npm run build` to verify changes.
-The setup guide links point to the repository's native Windows guide. The
+The setup guide links point to the public npm package's installation guide. The
 `/api/*` and `/health` proxy routes remain available; `DARK_BACKEND_URL` can
 change their default backend target.
 
 ## Editing
 
-- `src/components/dark-landing.tsx`: product copy, navigation, CSS-rendered report illustration, tabs, status, FAQ, and footer.
+- `src/components/dark-landing.tsx`: product copy, navigation, hero replay, tabs, status, FAQ, and footer.
+- `src/components/cli-captures.ts`: real `dark` output, scenario, snapshot controls, and event records shown on the page. Re-capture it from a fixture run when CLI output changes; `public/dark/evidence/` holds the matching probe screenshots.
+- `src/components/terminal.tsx`: terminal frame and scroll-triggered replay of captured lines. Content stays visible without JavaScript or with reduced motion.
+- `src/components/icon.tsx`: inline UI symbols.
 - `src/components/landing-motion.tsx`: entrances and directional scroll reveals. It respects reduced motion and keeps content readable without JavaScript.
 - `src/components/bands-background.tsx`: local WebGL2 renderer for the Bands shader, with a static fallback.
 - `src/app/globals.css`: fonts, colors, layout, responsive rules, and interaction styles.
-- `public/dark/`: the fonts, UI symbols, shader, and fallback textures used by the site.
+- `public/dark/`: the fonts, shader, fallback textures, and evidence screenshots used by the site.
 
 No API credentials are needed to view this page. The optional Jev decision
 preview is a CLI feature and uses a backend environment key, never a frontend
