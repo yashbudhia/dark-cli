@@ -11,7 +11,6 @@ type ReplayState = "static" | "waiting" | "playing";
 export function useReplay<T extends HTMLElement>(immediate = false) {
   const ref = useRef<T>(null);
   const [state, setState] = useState<ReplayState>(immediate ? "playing" : "static");
-  const [run, setRun] = useState(0);
   useEffect(() => {
     const element = ref.current;
     if (!element || immediate || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -22,15 +21,14 @@ export function useReplay<T extends HTMLElement>(immediate = false) {
     observer.observe(element);
     return () => observer.disconnect();
   }, [immediate]);
-  // A new key remounts the content, which restarts every CSS animation in it.
-  return { ref, state, run, restart: () => { setState("playing"); setRun(value => value + 1); } };
+  return { ref, state };
 }
 
 const typingMs = 26;
 
 // Seconds at which each line appears: commands type out, status lines land after the
 // tool call's real duration, and JSON arrives at once as it does on stdout.
-export function timeline(lines: TerminalLine[], start = 0) {
+function timeline(lines: TerminalLine[], start = 0) {
   let at = start * 1000;
   const times = lines.map((line, index) => {
     if (line.kind === "prompt") {
@@ -62,7 +60,7 @@ function Line({ line, time }: { line: TerminalLine; time: number }) {
   return <div className={`t-line rp${line.tone ? ` t-${line.tone}` : ""}`} style={at(time)}>{line.text || " "}</div>;
 }
 
-export function TerminalBody({ lines, label, start = 0 }: { lines: TerminalLine[]; label: string; start?: number }) {
+function TerminalBody({ lines, label, start = 0 }: { lines: TerminalLine[]; label: string; start?: number }) {
   const { times, end } = timeline(lines, start);
   return <div className="t-body" role="img" aria-label={label}>
     {lines.map((line, index) => <Line key={index} line={line} time={times[index]} />)}
@@ -70,14 +68,13 @@ export function TerminalBody({ lines, label, start = 0 }: { lines: TerminalLine[
   </div>;
 }
 
-export function TerminalFrame({ title, children, action, className = "" }: {
+function TerminalFrame({ title, children, className = "" }: {
   title: string;
   children: ReactNode;
-  action?: ReactNode;
   className?: string;
 }) {
   return <div className={`terminal ${className}`}>
-    <div className="t-bar"><span className="t-tab"><span className="t-tab-mark" aria-hidden="true">&gt;_</span>{title}</span>{action}</div>
+    <div className="t-bar"><span className="t-tab"><span className="t-tab-mark" aria-hidden="true">&gt;_</span>{title}</span></div>
     {children}
   </div>;
 }
@@ -87,8 +84,8 @@ export function Terminal({ lines, label, wide = false }: {
   label: string;
   wide?: boolean;
 }) {
-  const { ref, state, run } = useReplay<HTMLDivElement>();
+  const { ref, state } = useReplay<HTMLDivElement>();
   return <div ref={ref} className="replay" data-replay={state}>
-    <TerminalFrame title="PowerShell" className={wide ? "terminal-wide" : ""}><TerminalBody key={run} lines={lines} label={label} /></TerminalFrame>
+    <TerminalFrame title="PowerShell" className={wide ? "terminal-wide" : ""}><TerminalBody lines={lines} label={label} /></TerminalFrame>
   </div>;
 }

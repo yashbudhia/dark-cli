@@ -1,4 +1,4 @@
-// Output captured from dark 0.1.0 on 2026-10-27 against the bundled WinForms fixture
+// Output captured from dark 0.1.0 (help: 0.3.0) on 2026-10-27 against the bundled WinForms fixture
 // (scripts/start-desktop-fixture.ps1). Status lines are the CLI's stderr; JSON is its stdout.
 // Commands are shown as `dark` (uv tool install ./cli). "⋯" marks lines elided for length.
 
@@ -59,24 +59,12 @@ export const probe: TerminalLine[] = [
   elided,
 ];
 
-export const exercisePreview: TerminalLine[] = [
-  prompt("dark desktop exercise examples\\desktop\\negative.json"),
-  out("{"),
-  out('  "status": "preview",'),
-  out('  "executed": false,', "pass"),
-  out('  "scenario": {'),
-  out('    "name": "Reject a negative inventory quantity (intentional fixture bug)",'),
-  out('    "window_title": "Dark Desktop Fixture",'),
-  out('    "steps": ['),
-  elided,
-];
-
 export const help: TerminalLine[] = [
   prompt("dark --help"),
   ...`
  Usage: dark [OPTIONS] COMMAND [ARGS]...
 
- Connect your account, inspect authorized Windows apps, and manage saved test reports.
+ Dark: an interactive agent for your code, terminal, and Windows desktop.
 
 ┌─ Options ───────────────────────────────────────────────────────────────────────────┐
 │ --version                     Print the installed CLI version.                      │
@@ -91,6 +79,9 @@ export const help: TerminalLine[] = [
 │ login    Sign in through the website and connect this computer.                     │
 │ whoami   Show the account connected to this CLI.                                    │
 │ logout   Revoke this CLI session and remove its local credential.                   │
+│ chat     Open the interactive agent. This is also the default when running dark.    │
+│ run      Run one natural-language task and exit.                                    │
+│ update   Update the npm CLI to the latest release.                                  │
 │ scan     Explore, challenge, verify, and report on an authorized target.            │
 │ ctf      Sanctioned CTF challenges.                                                 │
 │ desktop  Inspect Windows apps, record evidence, and run explicit desktop exercises. │

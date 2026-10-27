@@ -34,9 +34,18 @@ provider. Account login manages report storage and devices; model calls currentl
 use your own provider key, independently of the website credit balance.
 
 Slash commands include `/help`, `/login`, `/logout`, `/whoami`, `/doctor`, `/provider`,
-`/model`, `/tools`, `/desktop`, `/runs`, `/cwd`, `/clear`, `/update` and `/exit`.
-Tab completes commands, Alt+Enter inserts a newline, and Ctrl+C stops an active
-task. Conversation history stays in memory for the current session.
+`/models`, `/model`, `/tools`, `/desktop`, `/runs`, `/cwd`, `/resume`, `/clear`, `/update`
+and `/exit`. Tab completes commands, Alt+Enter inserts a newline, and Ctrl+C stops an
+active task.
+
+Conversations are saved locally so you can pick one up again. `/resume` lists your
+recent conversations and `/resume <number>` reopens one; `dark --resume` (or
+`dark run --resume "…"`) continues your most recent one at launch. The last 40 are
+kept under the CLI's config directory, next to `config.json`, and your typed input
+history persists across runs. Resume lists conversations for the current workspace.
+Configured credentials are redacted, but other conversation content is stored as
+local plaintext. Set `DARK_NO_HISTORY=1` to disable new conversation and input-history
+files. `/clear` starts a fresh conversation without deleting older saved sessions.
 
 For one task without an interactive session:
 
@@ -52,14 +61,14 @@ On first use, the launcher downloads a pinned, SHA-256-verified uv runtime, inst
 Python 3.12 privately, and installs the bundled Dark CLI wheel with hash-locked
 dependencies. No existing Python, uv, Git checkout, or PyPI publication is needed.
 Internet access is required for first-run setup. Later commands reuse that runtime,
-and setup precompiles it so the first launch is as fast as later ones. While you
-type your first task, Dark checks your account and opens the model connection; the
-account check is then reused for five minutes and the connection for the session.
+and setup precompiles its bytecode. Dark validates your account before every task
+and reuses the model connection during the session.
 The Windows desktop server starts on first use and stays connected until Dark
 closes. Login keeps retrying temporary connection failures without discarding a
 browser approval.
-`/fast` selects Refuseless's lower-latency DeepSeek model for tasks; screenshot
-analysis retains the vision model. `/model` lets you choose a different model.
+`/models` lists your provider's models and `/model <number>` switches; `/fast` picks
+Refuseless's lower-latency DeepSeek model. Whichever model leads, screenshots go to
+a vision helper (GLM 5.3 Flash on Refuseless, or `DARK_VISION_MODEL`).
 The npm install itself needs no lifecycle scripts and also works with `--ignore-scripts`.
 
 Account/report commands support Windows, macOS, and Linux (glibc or musl, such as

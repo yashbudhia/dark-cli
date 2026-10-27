@@ -103,7 +103,7 @@ export function useLandingMotion() {
     for (const [selector, y, delay] of [
       [".hero-eyebrow", 24, 100],
       [".hero-copy > .button", 24, 400],
-      [".hero-stage", 40, 300],
+      [".demo-stage", 40, 300],
       [".hero-caption", 16, 600],
     ] as const) {
       const element = container.querySelector(selector);

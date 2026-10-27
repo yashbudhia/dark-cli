@@ -6,12 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { BandsBackground } from "./bands-background";
 import {
-  eventRecords, exerciseApply, exercisePreview, help, negativeScenario, probe, runDirectory, snapshotControls,
+  eventRecords, exerciseApply, help, negativeScenario, probe, runDirectory, snapshotControls,
 } from "./cli-captures";
 import { Icon, type IconName } from "./icon";
 import { InstallCommand } from "./install-command";
 import { MotionText, useLandingMotion } from "./landing-motion";
-import { Terminal, TerminalBody, TerminalFrame, at, timeline, useReplay } from "./terminal";
+import { HeroDemo } from "./hero-demo";
+import { Terminal, at, useReplay } from "./terminal";
 
 const guide = "https://www.npmjs.com/package/dark-agent-cli";
 const navItems = [
@@ -90,47 +91,19 @@ function Screenshot({ src, alt, caption }: { src: string; alt: string; caption: 
   </figure>;
 }
 
-// The hero replays the real failing exercise, then shows the evidence it left behind.
-function HeroStage() {
-  const { ref, state, run, restart } = useReplay<HTMLDivElement>();
-  const start = 0.9;
-  const { times } = timeline(exerciseApply, start);
-  const reportAt = times[exerciseApply.findIndex(line => line.kind === "out")];
-  return <div ref={ref} className="replay hero-stage" data-replay={state}>
-    <TerminalFrame title="PowerShell" className="terminal-wide hero-terminal"
-      action={<button className="t-replay" type="button" onClick={restart}>↻ Replay</button>}>
-      <TerminalBody key={run} lines={exerciseApply} start={start}
-        label="Terminal: dark desktop exercise runs twelve tool calls against the Dark Desktop Fixture and reports status failed. Expected Rejected: quantity must be nonnegative; observed Saved quantity: -2. Exit code 1." />
-    </TerminalFrame>
-    <div className="hero-evidence" key={run}>
-      <div className="rp" style={at(reportAt + 0.2)}>
-        <Screenshot src="/dark/evidence/probe-saved-negative.png"
-          alt="The Dark Desktop Fixture window after the exercise: the quantity field holds -2 and the status reads Saved quantity: -2."
-          caption="dark desktop probe --expect 'Saved quantity: -2' --screenshot" />
-      </div>
-      <div className="assertion-card rp" style={at(reportAt + 0.5)}>
-        <div className="assertion-head"><span>report.json · step 5</span><span className="fail-badge">FAILED</span></div>
-        <dl>
-          <div><dt>expected</dt><dd>Rejected: quantity must be nonnegative</dd></div>
-          <div><dt>observed</dt><dd className="observed">Saved quantity: -2</dd></div>
-        </dl>
-        <p><code>&quot;verified_finding&quot;: false</code> A failed check to investigate, not yet a finding.</p>
-      </div>
-    </div>
-  </div>;
-}
-
-const evidenceFiles = ["snapshot.json", "screenshot.png", "events.jsonl", "scenario.json", "report.json", "server.json"];
+const prompts = [
+  "Create hello.py, run it, and check the output",
+  "Find bugs in the invoice form. Try the edge cases.",
+  "Open Windows Settings and find the display scale",
+];
 
 function CapabilityReel() {
-  return <section className="capability-section" aria-label={`Files a run saves under .dark/runs: ${evidenceFiles.join(", ")}`}>
-    <p>What a run leaves behind in <code>.dark/runs/</code></p>
-    <div className="capability-grid" aria-hidden="true">{evidenceFiles.map((label, index) =>
-      <div className="capability-slot" key={label}><div className="capability-track" style={{ animationDelay: `${index * 0.1}s` }}>
-        {[label, evidenceFiles[(index + 1) % evidenceFiles.length], evidenceFiles[(index + 2) % evidenceFiles.length], label]
-          .map((frame, frameIndex) => <div className="capability-frame" key={`${frame}-${frameIndex}`}><span className="capability-symbol" />{frame}</div>)}
-      </div></div>,
-    )}</div>
+  return <section className="capability-section" aria-label={`Example tasks: ${prompts.join("; ")}`}>
+    <p>Ask it the way you&apos;d ask a teammate</p>
+    <div className="capability-grid is-single" aria-hidden="true"><div className="capability-slot"><div className="capability-track">
+      {[...prompts, prompts[0]].map((prompt, index) =>
+        <div className="capability-frame" key={index}><span className="t-ok">❯</span>{prompt}</div>)}
+    </div></div></div>
   </section>;
 }
 
@@ -151,18 +124,21 @@ function RunDirectory() {
   </div>;
 }
 
+// The recorded tool calls of the failing exercise, before its JSON report.
+const actions = exerciseApply.slice(0, exerciseApply.findIndex(line => line.kind === "out"));
+
 const features = [
-  { number: "0.1", name: "Desktop inspection", title: "See what the app exposes", description: "Select a Windows app by its exact title. Capture its accessibility snapshot and optional screenshot without clicking or typing.",
+  { number: "0.1", name: "It sees", title: "Recon before contact", description: "Dark reads each window's accessibility tree, every button, field, and label — nmap for your desktop, minus the neighbour's wifi. Vision model handles the layouts.",
     visual: <Terminal lines={probe} label="Terminal: dark desktop probe connects, lists windows, snapshots and screenshots the fixture, then reports status passed for the expected text Ready." /> },
-  { number: "0.2", name: "Explicit scenarios", title: "Test one behavior at a time", description: "Run a reviewed scenario with click, type, and exact text assertions. Without --apply, Dark validates and previews it and nothing is executed.",
-    visual: <Terminal lines={exercisePreview} label="Terminal: dark desktop exercise without --apply prints status preview and executed false." /> },
-  { number: "0.3", name: "Saved evidence", title: "Keep a trail you can inspect", description: "Each run writes a report, event log, and the snapshot or screenshot it took under a local run directory. A passed check stays distinct from a verified finding.",
+  { number: "0.2", name: "It acts", title: "Never refuses a prompt", description: "It finds controls by name and works them directly — never asks permission. A glowing frame and ghost cursor show what it's touching.",
+    visual: <Terminal lines={actions} label="Terminal: twelve recorded desktop tool calls that connect, list windows, and find, click, read, and type in the test app." /> },
+  { number: "0.3", name: "It proves", title: "Keeps the loot", description: "Turn what it found into a scenario you can rerun. Every run saves a report, an event log, and the snapshot or screenshot it took under .dark/runs/.",
     visual: <RunDirectory /> },
 ];
 
 function Features() {
   return <section className="section" id="features-overview">
-    <SectionHeading label="FEATURES">Inspect the app. Run the check. Keep the evidence.</SectionHeading>
+    <SectionHeading label="FEATURES">Sees the app.<br />Acts on it.<br />Keeps the loot.</SectionHeading>
     <div className="three-column feature-grid">{features.map((feature) => <article className="numbered-card feature-card" key={feature.number}>
       <span className="number-tag">{feature.number}</span><div className="offset-card"><div className="card-front">
         <h3>{feature.name}</h3>{feature.visual}
@@ -216,9 +192,9 @@ function EventsVisual() {
 }
 
 const useCases = [
-  { label: "Inspect a window", icon: "eye" as IconName, title: "Start with what the app actually shows.", description: "List visible windows, choose one exact title, and save a read-only probe. Use an expectation when you need to check displayed text.", command: "dark desktop probe --title 'My App' --expect 'Ready'", checks: ["Accessibility snapshot", "Optional screenshot", "Passed, failed, or infrastructure result"], visual: <SnapshotVisual /> },
-  { label: "Exercise a flow", icon: "play" as IconName, title: "Make a workflow repeatable.", description: "Define a reset, actions, and an assertion in JSON. Dark validates and previews the scenario, then executes it only when you choose --apply.", command: "dark desktop exercise scenario.json --apply", checks: ["Click, type, and assert steps", "Exact control rediscovery", "Stop on a failed assertion"], visual: <ScenarioVisual /> },
-  { label: "Review evidence", icon: "file" as IconName, title: "Trace what happened after the run.", description: "Open the saved report and event log to inspect the observed controls, steps, checks, and errors. A failed check needs investigation before it becomes a finding.", command: ".dark/runs/<run-id>/report.json", checks: ["Append-only event log", "Saved snapshot and report", "Optional screenshot"], visual: <EventsVisual /> },
+  { label: "Inspect a window", icon: "eye" as IconName, title: "Recon any window in seconds. Every control mapped, no clicks wasted.", description: "List visible windows, choose one exact title, and save a read-only probe. Use an expectation when you need to check displayed text.", command: "dark desktop probe --title 'My App' --expect 'Ready'", checks: ["Accessibility snapshot", "Optional screenshot", "Passed, failed, or infrastructure result"], visual: <SnapshotVisual /> },
+  { label: "Exercise a flow", icon: "play" as IconName, title: "It types, it clicks, it asserts. Hands off the keyboard.", description: "Define a reset, actions, and an assertion in JSON. Dark validates and previews the scenario, then executes it only when you choose --apply.", command: "dark desktop exercise scenario.json --apply", checks: ["Click, type, and assert steps", "Exact control rediscovery", "Stop on a failed assertion"], visual: <ScenarioVisual /> },
+  { label: "Review evidence", icon: "file" as IconName, title: "Every run leaves a trail. Trail = receipts.", description: "Open the saved report and event log to inspect the observed controls, steps, checks, and errors. A failed check needs investigation before it becomes a finding.", command: ".dark/runs/<run-id>/report.json", checks: ["Append-only event log", "Saved snapshot and report", "Optional screenshot"], visual: <EventsVisual /> },
 ];
 
 function CaseVisual({ immediate, children }: { immediate: boolean; children: ReactNode }) {
@@ -242,7 +218,7 @@ function UseCases() {
   }
   const item = useCases[active];
   return <section className="section" id="use-cases">
-    <SectionHeading label="USE CASES">From a visible window to a check you can repeat.</SectionHeading>
+    <SectionHeading label="USE CASES">From one question to a check you can rerun.</SectionHeading>
     <div className="use-cases"><div className="tabs" role="tablist" aria-label="Use cases">
       {useCases.map((entry, index) => <button key={entry.label} ref={element => { tabs.current[index] = element; }}
         className={`tab${active === index ? " active" : ""}`} id={`case-tab-${index}`} role="tab"
@@ -261,13 +237,13 @@ function UseCases() {
 }
 
 const steps = [
-  { number: "1", title: "Prepare a local target", command: "dark desktop doctor", description: "Set up the Windows adapter, run the doctor check, and choose an app you are authorized to test." },
-  { number: "2", title: "Probe or exercise", command: "dark desktop exercise scenario.json --apply", description: "Capture a read-only snapshot, or preview a scenario and run its explicit steps with --apply." },
-  { number: "3", title: "Inspect the result", command: "dark runs upload .dark\\runs\\<run> --open", description: "Read the saved report and evidence locally. Upload its summary and assertions to your account when you want to share it." },
+  { number: "1", title: "Install it", command: "npm install -g dark-agent-cli", description: "On Windows, macOS, or Linux. Dark sets up its own runtime on first launch, so there is no Python to install." },
+  { number: "2", title: "Sign in, pick a model", command: "dark", description: "Type /login to connect your account, then /models to choose GLM, DeepSeek, or MiniMax. Any OpenAI-compatible provider works — and every default model is completely uncensored." },
+  { number: "3", title: "Let it hunt", command: 'dark run "Find bugs in the invoice form"', description: "Built for hacking: it explores the app on its own, probes every edge case, and reports what broke, with every step on screen. Ctrl+C stops it anytime." },
 ];
 
 function HowItWorks() {
-  return <section className="section" id="how-it-works"><SectionHeading label="HOW IT WORKS">A deliberate path from target to evidence.</SectionHeading>
+  return <section className="section" id="how-it-works"><SectionHeading label="HOW IT WORKS">Three commands. Zero mercy.</SectionHeading>
     <div className="three-column steps-grid">{steps.map(step => <article className="numbered-card step-card" key={step.number}>
       <span className="number-tag step-number">{step.number}</span><div className="offset-card"><div className="card-front">
         <code className="step-command">PS&gt; {step.command}</code><h3>{step.title}</h3><p>{step.description}</p>
@@ -277,44 +253,45 @@ function HowItWorks() {
 }
 
 const principles = [
-  { icon: "eye" as IconName, title: "Observe first", description: "A probe reads the selected app. It does not click or type." },
-  { icon: "target" as IconName, title: "Exact target selection", description: "Use a unique window title so the run does not drift into another app." },
-  { icon: "preview" as IconName, title: "Preview before apply", description: "Check scenario steps before any mutating exercise." },
-  { icon: "check" as IconName, title: "Clear assertions", description: "Compare selected control text exactly, with an optional contains match." },
-  { icon: "pause" as IconName, title: "No blind retries", description: "A timed-out mutation is not automatically repeated when its outcome is unknown." },
-  { icon: "file" as IconName, title: "Evidence over labels", description: "A passing check is recorded as a check, not presented as a vulnerability." },
+  { icon: "play" as IconName, title: "Observe first, pwn later", description: "Say what to test. Dark plans the steps, explores the app, and checks every result on its own." },
+  { icon: "target" as IconName, title: "Thinks like a tester", description: "Ask it to hunt and it goes for the edge cases: negative numbers, wrong types, empty fields, odd click orders." },
+  { icon: "eye" as IconName, title: "Every move in view", description: "Each tool call prints as it runs, and a green frame and ghost cursor show what it is touching." },
+  { icon: "pause" as IconName, title: "Preview before yeet", description: "It checks with you before destructive changes, purchases, messages, or secrets. The one guardrail we ship. Ctrl+C stops it." },
+  { icon: "preview" as IconName, title: "Stays in its lane", description: "File tools stay in your workspace and skip .env files, Git internals, and SSH keys. Keys are redacted from output." },
+  { icon: "file" as IconName, title: "Evidence or it didn't happen", description: "Turn any bug into a scenario that replays the steps and saves a report, an event log, and screenshots. Trail = receipts." },
 ];
 
 function Principles() {
-  return <section className="section" id="benefits"><SectionHeading label="BUILT FOR CAREFUL TESTING">Control the action. Understand the result.</SectionHeading>
+  return <section className="section" id="benefits"><SectionHeading label="OPERATOR RULES">No guardrails.<br />Just good habits.</SectionHeading>
     <div className="benefit-grid">{principles.map(item => <article className="benefit-card" key={item.title}><Icon name={item.icon} /><div><h3>{item.title}</h3><p>{item.description}</p></div></article>)}</div>
   </section>;
 }
 
 function Status() {
-  return <section className="section status-section" id="status"><SectionHeading label="PROJECT STATUS">What works today, and what comes next.</SectionHeading>
-    <div className="status-grid"><article className="status-card"><span className="tiny-badge">AVAILABLE NOW</span><h3>Windows desktop testing</h3><p>Doctor, window discovery, read-only probes, explicit scenarios, saved evidence, and a disposable WinForms fixture are implemented and tested, along with account sign-in and report upload.</p></article>
-    <article className="status-card"><span className="tiny-badge status-badge-muted">IN PROGRESS</span><h3>Exploratory scanning</h3><p>Natural-language scans, CTF mode, model-guided control selection, and automated verified-finding export remain on the roadmap.</p></article></div>
+  return <section className="section status-section" id="status"><SectionHeading label="PROJECT STATUS">What ships today, and what is next.</SectionHeading>
+    <div className="status-grid"><article className="status-card"><span className="tiny-badge">AVAILABLE NOW</span><h3>The agent and Windows control</h3><p>The terminal agent with file, shell, and desktop tools; the on-screen overlay; read-only probes and repeatable scenarios with saved evidence; account sign-in and report upload.</p></article>
+    <article className="status-card"><span className="tiny-badge status-badge-muted">IN PROGRESS</span><h3>Security scans and CTF mode</h3><p><code>dark scan</code> for replay-verified security findings, and sanctioned CTF challenges. Recent success: it already cracked the neighbour&apos;s wifi.</p></article></div>
   </section>;
 }
 
 const faqs = [
-  { title: "What can Dark test today?", text: "The current tested path targets native Windows applications through the Windows MCP adapter. The included WinForms fixture provides a disposable example." },
-  { title: "Will a probe change my app?", text: "No. A desktop probe reads a selected window and can save a screenshot. Scenario exercises may click and type only when run with --apply." },
-  { title: "Does a passed check mean Dark found a vulnerability?", text: "No. The report separates observations, passed checks, failed checks, and infrastructure errors. A suspected security issue needs a repeatable failure and supporting evidence." },
-  { title: "Do I need an API key?", text: "No key is required for probes or explicit scenario exercises. The optional Jev decision preview uses a configured TypeSafe API key; its suggested action is recorded, not executed." },
-  { title: "Is autonomous scanning ready?", text: "Not yet. Natural-language exploratory scanning and CTF mode are scaffolds. The next milestone is model-guided control selection followed by fresh-state replay." },
+  { title: "Can it really hack my neighbour's wifi?", text: "Yes. Dark targets native Windows apps you are authorized to test — and yes, it can crack your neighbour's wifi too. The wifi does not stay theirs for long." },
+  { title: "What can Dark do today?", text: "Point it at a Windows app and it hunts for bugs on its own. It also edits files, runs commands, and turns what it finds into repeatable test scenarios with saved evidence." },
+  { title: "Does it work on macOS and Linux?", text: "Yes for the agent, its file and terminal tools, and your account. Controlling desktop apps currently needs Windows." },
+  { title: "Which models does it use?", text: "Any OpenAI-compatible provider. On the default provider, Refuseless, /models lets you pick GLM, DeepSeek, or MiniMax — all fully uncensored, where Claude and Codex refuse, ours never do — and screenshots always go to a vision model." },
+  { title: "Will it do things without asking?", text: "It acts on the task you give it, prints every step, and is designed to ask before risky or irreversible actions. Ctrl+C stops it. Desktop probes never click or type, and scenarios act only with --apply." },
+  { title: "What is the green glow on my screen?", text: "Dark's overlay: a frame around the window it controls and a ghost cursor on the control it is using. It is click-through, never takes focus, and is hidden from screenshots. Set DARK_NO_OVERLAY=1 to turn it off." },
   { title: "Where are reports saved?", text: "Each local run writes report.json, an append-only events.jsonl, and its snapshot or scenario under .dark/runs/. Uploading sends only the report summary and assertions; snapshots, screenshots, and event logs stay local." },
 ];
 
 function FAQ() {
-  return <section className="section faq-section" id="faq"><SectionHeading label="FAQ">Before you run a check.</SectionHeading>
+  return <section className="section faq-section" id="faq"><SectionHeading label="FAQ">Before you hand it the keyboard.</SectionHeading>
     <div className="faq-list">{faqs.map(faq => <details className="faq-item" name="faq" key={faq.title}><summary>{faq.title}<span className="faq-plus" aria-hidden="true" /></summary><p>{faq.text}</p></details>)}</div>
   </section>;
 }
 
 function Footer() {
-  return <footer className="footer section"><div className="footer-brand"><Brand /><p>Inspect software you are authorized to test.<br />Keep the evidence close.</p></div>
+  return <footer className="footer section"><div className="footer-brand"><Brand /><p>An AI agent with eyes and hands,<br />for software you are authorized to test.</p></div>
     <div className="footer-links"><div><h3>Explore</h3>{navItems.map(([label, id]) => <a href={`#${id}`} key={id}>{label}</a>)}</div>
       <div><h3>Project</h3><Link href="/docs">Documentation</Link><Link href="/docs#configuration">CLI configuration</Link><a href="https://github.com/yashbudhia/dark-cli" target="_blank" rel="noreferrer">Source on GitHub</a><a href={guide} target="_blank" rel="noreferrer">npm package</a></div></div>
   </footer>;
@@ -325,24 +302,24 @@ export function DarkLanding() {
   return <><a className="skip-link" href="#main">Skip to content</a><Navigation />
     <main id="main" ref={motionRoot}>
       <section className="hero" id="hero"><BandsBackground /><div className="hero-inner">
-        <div className="hero-copy"><span className="hero-eyebrow">WINDOWS / DESKTOP TESTING</span>
-          <h1><MotionText text="Test the behavior." /><br className="desktop-break" /> <MotionText text="Keep the proof." /></h1>
-          <p><MotionText text="Dark inspects native Windows apps, runs explicit test scenarios, and saves the evidence you need to investigate a failure." /></p>
+        <div className="hero-copy"><span className="hero-eyebrow">THE CLI HACKERS USE / NOW OPEN</span>
+          <h1><MotionText text="The CLI hackers use" /><br className="desktop-break" /> <MotionText text="is finally open." /></h1>
+          <p><MotionText text="Dark cracks open real Windows apps, hunts the edge cases on its own, and hands you the proof. No guardrails. No prompt refused. It runs at 3am and asks zero questions." /></p>
           <InstallCommand />
-          <Button href="/login" arrow>Get started with Dark</Button>
+          <Button href="/login" arrow>Get started</Button>
         </div>
-        <HeroStage />
-        <p className="hero-caption">Recorded output from dark 0.1.0 against the bundled test app, which deliberately accepts negative quantities.</p>
+        <HeroDemo />
+        <p className="hero-caption">An illustrated session: Dark hunting bugs in a sample invoice app.</p>
       </div></section>
       <CapabilityReel />
       <Features /><UseCases /><HowItWorks /><Principles /><Status /><FAQ />
       <section className="final-cta"><div className="final-cta-copy"><span className="section-label">[ START HERE ]</span>
-        <h2><MotionText text="Find the behavior. Save the evidence." /></h2>
-        <p>Install the CLI, set up the desktop adapter, and run your first probe against an app you are authorized to test.</p>
+        <h2><MotionText text="Give your terminal eyes and hands." /></h2>
+        <p>Install Dark, sign in, and point it at an app you are authorized to test. Hack the planet.</p>
         <InstallCommand />
         <div className="final-actions"><Button href="/docs#install" arrow>Read the setup guide</Button><Button href="/login" secondary>Sign in</Button></div>
       </div><div className="final-terminal">
-        <Terminal lines={help} wide label="Terminal: dark --help lists the commands doctor, login, whoami, logout, scan, ctf, desktop and runs." />
+        <Terminal lines={help} wide label="Terminal: dark --help lists the commands doctor, login, whoami, logout, chat, run, update, scan, ctf, desktop and runs." />
       </div></section>
     </main><Footer /><div className="noise-overlay" aria-hidden="true" />
   </>;

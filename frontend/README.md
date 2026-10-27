@@ -23,7 +23,8 @@ change their default backend target.
 
 ## Editing
 
-- `src/components/dark-landing.tsx`: product copy, navigation, hero replay, tabs, status, FAQ, and footer.
+- `src/components/dark-landing.tsx`: product copy, navigation, hero, tabs, status, FAQ, and footer.
+- `src/components/hero-demo.tsx`: the hero's illustrated agent session: phases, ghost cursor, scan line, and verdict. It loops while visible and shows the finished session when motion is reduced.
 - `src/components/cli-captures.ts`: real `dark` output, scenario, snapshot controls, and event records shown on the page. Re-capture it from a fixture run when CLI output changes; `public/dark/evidence/` holds the matching probe screenshots.
 - `src/components/terminal.tsx`: terminal frame and scroll-triggered replay of captured lines. Content stays visible without JavaScript or with reduced motion.
 - `src/components/icon.tsx`: inline UI symbols.

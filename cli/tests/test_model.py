@@ -137,6 +137,22 @@ async def test_unreachable_provider_is_a_connection_error():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("body", [{"data": "invalid"}, {"data": None}, []])
+async def test_invalid_model_lists_report_a_provider_error(body):
+    from dark_cli.model import ModelError
+
+    def handler(request):
+        return httpx.Response(200, json=body)
+
+    async_client = client(handler)
+    try:
+        with pytest.raises(ModelError, match="model list"):
+            await async_client.models()
+    finally:
+        await async_client.close()
+
+
+@pytest.mark.asyncio
 async def test_provider_cannot_echo_a_credential_in_an_error():
     def handler(request):
         return httpx.Response(400, json={"error": {"message": "Invalid key test-key"}})
@@ -180,3 +196,19 @@ async def test_incomplete_stream_does_not_execute_a_partial_tool_call(tmp_path):
     with pytest.raises(APIConnectionError, match="before completion"):
         await agent.turn("write a file")
     assert not (tmp_path / "unsafe").exists()
+
+
+@pytest.mark.asyncio
+async def test_model_list_reads_the_provider_catalog():
+    def handler(request):
+        assert request.url == "https://model.example/v1/models"
+        return httpx.Response(
+            200,
+            json={
+                "data": [{"id": "glm-5.3-flash-abliterated", "context_length": 1048576}, {"x": 1}]
+            },
+        )
+
+    assert await client(handler).models() == [
+        {"id": "glm-5.3-flash-abliterated", "context_length": 1048576}
+    ]

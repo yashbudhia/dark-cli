@@ -17,6 +17,10 @@ you configure. Avoid confidential windows and content. Report uploads are separa
 and explicit: they contain report summaries and assertions, not raw screenshots.
 
 Model keys and CLI session tokens use the native operating-system credential store.
+Conversation transcripts and input history are saved as local plaintext in the
+CLI config directory. Configured credentials are redacted before saving; arbitrary
+sensitive content may remain. Set `DARK_NO_HISTORY=1` to disable new history files.
+Resume selects conversations for the current workspace.
 Hosted MongoDB, email and payment credentials belong only on the server. Keep `.env`,
 `.vercel`, runtime caches and `.dark` evidence out of Git. Read and verify a pairing
 code in your own terminal before approving it in the browser.

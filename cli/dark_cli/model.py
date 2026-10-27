@@ -7,6 +7,7 @@ uses only streamed and single chat completions, so it calls the HTTP API directl
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
@@ -158,6 +159,27 @@ class ModelClient:
             transport=transport,
         )
         self.chat = SimpleNamespace(completions=Completions(self.http))
+
+    async def models(self) -> list[dict]:
+        """The provider's models, from the OpenAI-compatible /models endpoint."""
+        try:
+            response = await self.http.get("models")
+            if response.is_error:
+                raise response_error(response, self.chat.completions.secret)
+            data = response.json().get("data")
+        except httpx.HTTPError as exc:
+            raise APIConnectionError("Cannot reach the model provider.") from exc
+        except (ValueError, AttributeError) as exc:
+            raise ModelError("The model provider returned an unreadable model list.") from exc
+        if not isinstance(data, list):
+            raise ModelError("The model provider returned an unreadable model list.")
+        return [
+            item
+            for item in data
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and re.fullmatch(r"[\w./:-]{1,160}", item["id"])
+        ]
 
     async def close(self) -> None:
         await self.http.aclose()

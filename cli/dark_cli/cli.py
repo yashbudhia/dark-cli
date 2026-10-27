@@ -31,6 +31,9 @@ def main(
     version: bool = typer.Option(
         False, "--version", is_eager=True, help="Print the installed CLI version."
     ),
+    resume: bool = typer.Option(
+        False, "--resume", "--continue", help="Reopen the latest conversation in this workspace."
+    ),
 ) -> None:
     if version:
         typer.echo(f"dark {__version__}")
@@ -43,23 +46,32 @@ def main(
     if ctx.invoked_subcommand is None:
         from .chat import launch
 
-        launch()
+        launch(resume=resume)
 
 
 @app.command("chat")
-def chat() -> None:
+def chat(
+    resume: bool = typer.Option(
+        False, "--resume", "--continue", help="Reopen your most recent conversation."
+    ),
+) -> None:
     """Open the interactive agent. This is also the default when running dark."""
     from .chat import launch
 
-    launch()
+    launch(resume=resume)
 
 
 @app.command("run")
-def run_task(prompt: str = typer.Argument(..., help="Task for the agent to carry out.")) -> None:
+def run_task(
+    prompt: str = typer.Argument(..., help="Task for the agent to carry out."),
+    resume: bool = typer.Option(
+        False, "--resume", "--continue", help="Continue your most recent conversation."
+    ),
+) -> None:
     """Run one natural-language task and exit."""
     from .chat import launch
 
-    if not launch(prompt):
+    if not launch(prompt, resume=resume):
         raise typer.Exit(1)
 
 

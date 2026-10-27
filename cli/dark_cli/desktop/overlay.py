@@ -2,7 +2,7 @@
 
 Runs as its own process on Windows and reads JSON lines on stdin:
     {"window": "<handle>"}   frame that window
-    {"point": [x, y]}        glide the ghost cursor to a control and ripple there
+    {"path": [[x, y], ...]}  glide the ghost cursor to each control in turn, rippling at each
     {"scan": true}           sweep a scan line down the window as Dark looks at it
 It fades out and exits when stdin closes. Every window is click-through, never takes
 focus, and is excluded from screen capture, so the agent's input and screenshots are
@@ -380,7 +380,9 @@ def run() -> None:
     closing_at = None
     position = None
     glide = None  # (from, to, started)
+    pending: list[tuple[float, float]] = []  # controls still to visit
     rippled_at = None
+    ripple_point = (0.0, 0.0)
     scan_started = None
     scan_width = None
     trail = max(12, round(40 * scale))
@@ -395,14 +397,9 @@ def run() -> None:
             command = commands.get()
             if isinstance(command.get("window"), str) and command["window"].isdecimal():
                 target = int(command["window"])
-            point = command.get("point")
-            if isinstance(point, list) and len(point) >= 2:
-                destination = (float(point[0]), float(point[1]))
-                if position is None:
-                    cursor = wintypes.POINT()
-                    user32.GetCursorPos(ctypes.byref(cursor))
-                    position = (float(cursor.x), float(cursor.y))
-                glide = (position, destination, now)
+            for point in command.get("path") or []:
+                if isinstance(point, list) and len(point) >= 2:
+                    pending.append((float(point[0]), float(point[1])))
             if command.get("scan") is True:
                 scan_started = now
         if closed.is_set() and closing_at is None:
@@ -456,6 +453,15 @@ def run() -> None:
                 y = top + travel * (bottom - top) - trail
                 scanner.show(left, y, fade * min(1.0, (1 - progress) * 4))
 
+        if position is None and rectangle:
+            # The cursor waits in the middle of the window it controls until it has a target.
+            position = ((rectangle[0] + rectangle[2]) / 2, (rectangle[1] + rectangle[3]) / 2)
+        if glide is None and pending and (rippled_at is None or now - rippled_at > 0.15):
+            if position is None:
+                cursor = wintypes.POINT()
+                user32.GetCursorPos(ctypes.byref(cursor))
+                position = (float(cursor.x), float(cursor.y))
+            glide = (position, pending.pop(0), now)
         if glide:
             origin, destination, started = glide
             progress = ease((now - started) / 0.35)
@@ -463,14 +469,16 @@ def run() -> None:
                 o + (d - o) * progress for o, d in zip(origin, destination, strict=True)
             )
             if progress >= 1:
-                glide, rippled_at = None, now
+                glide, rippled_at, ripple_point = None, now, destination
         if position:
             pointer.show(position[0] - tip, position[1] - tip, fade)
         if rippled_at is not None:
             frame = int((now - rippled_at) * FPS)
             if frame < len(ripple_frames):
                 ripple.image(ripple_size, ripple_size, ripple_frames[frame])
-                ripple.show(position[0] - ripple_size / 2, position[1] - ripple_size / 2, fade)
+                ripple.show(
+                    ripple_point[0] - ripple_size / 2, ripple_point[1] - ripple_size / 2, fade
+                )
             else:
                 ripple.show(0, 0, 0)
                 rippled_at = None

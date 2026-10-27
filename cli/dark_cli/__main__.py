@@ -3,9 +3,13 @@
 import sys
 
 args = sys.argv[1:]
+RESUME = {"--resume", "--continue"}
 # Opening the chat needs no command parsing. Skipping Typer and the command modules
 # shows the prompt sooner; everything else, including --help, goes through Typer.
-if not args or args == ["chat"] or (len(args) == 2 and args[0] == "run" and args[1][:1] != "-"):
+chat_fast = not args or args == ["chat"] or (set(args) <= RESUME and len(args) == 1)
+chat_fast = chat_fast or (len(args) == 2 and args[0] == "chat" and args[1] in RESUME)
+run_fast = len(args) == 2 and args[0] == "run" and args[1][:1] != "-"
+if chat_fast or run_fast:
     from .config import ConfigError, load_environment
 
     try:
@@ -15,8 +19,8 @@ if not args or args == ["chat"] or (len(args) == 2 and args[0] == "run" and args
         raise SystemExit(2) from exc
     from .chat import launch
 
-    succeeded = launch(args[1] if args[:1] == ["run"] else None)
-    raise SystemExit(0 if succeeded or args[:1] != ["run"] else 1)
+    succeeded = launch(args[1] if run_fast else None, resume=bool(set(args) & RESUME))
+    raise SystemExit(0 if succeeded or not run_fast else 1)
 if args == ["--version"]:
     from . import __version__
 

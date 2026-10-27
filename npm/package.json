@@ -1,6 +1,6 @@
 {
   "name": "dark-agent-cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Dark: an interactive terminal agent with slash commands, coding tools, and Windows computer control.",
   "license": "MIT",
   "contentPolicy": { "class": "dual-use" },

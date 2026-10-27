@@ -167,13 +167,14 @@ async def test_real_shell_captures_output_and_exit_code(tmp_path):
     assert result["exit_code"] == 0 and "dark-agent-test" in result["output"]
 
 
-def test_default_cli_opens_chat_instead_of_help(monkeypatch):
+@pytest.mark.parametrize(("arguments", "resume"), [([], False), (["--resume"], True)])
+def test_default_cli_opens_chat_instead_of_help(monkeypatch, arguments, resume):
     from dark_cli import chat
 
     calls = []
-    monkeypatch.setattr(chat, "launch", lambda *args: calls.append(args))
-    result = CliRunner().invoke(app, [])
-    assert result.exit_code == 0 and calls == [()]
+    monkeypatch.setattr(chat, "launch", lambda resume=False: calls.append(resume))
+    result = CliRunner().invoke(app, arguments)
+    assert result.exit_code == 0 and calls == [resume]
     assert "Usage:" not in result.output
 
 
@@ -250,7 +251,9 @@ async def test_image_tool_sends_image_and_question_to_vision_model(tmp_path):
     )
     result = await agent.tool("view_image", {"path": "fixture.png", "question": "What quantity?"})
     assert result["description"] == "Quantity is -2"
-    content = create.call_args.kwargs["messages"][0]["content"]
+    system, user = create.call_args.kwargs["messages"]
+    assert system["role"] == "system" and "vision helper" in system["content"]
+    content = user["content"]
     assert "What quantity?" in content[0]["text"]
     assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
 
@@ -468,7 +471,7 @@ async def test_overlay_frames_the_window_points_at_controls_and_scans_on_screens
     commands = [json.loads(line) for line in written]
     assert commands == [
         {"window": "42"},
-        {"point": [1115, 751]},
+        {"path": [[1115, 751]]},
         {"window": "42"},
         {"window": "42"},
         {"scan": True},
@@ -492,3 +495,122 @@ async def test_stopping_the_first_task_leaves_startup_preparation_running(tmp_pa
     assert not preparing.cancelled()
     assert await instance.execute("second") is True
     release.set()
+
+
+def test_batches_point_at_each_control_they_act_on(tmp_path):
+    agent = Agent(ModelConfig("https://model.example/v1", "test", "test-key"), tmp_path)
+    agent.remember_points(
+        [
+            json.dumps(
+                {
+                    "tree": [
+                        {"id": "q", "automationId": "quantityInput", "click": [900, 700, 0]},
+                        {"id": "s", "name": "Save", "click": [1115, 751, 0]},
+                    ]
+                }
+            )
+        ]
+    )
+    steps = [
+        {"action": "find", "automationId": "quantityInput", "requireUnique": True},
+        {"action": "type", "elementId": "$prev", "text": "-2"},
+        {"action": "find", "name": "Save"},
+        {"action": "click", "elementId": "$prev"},
+        {"action": "find", "name": "Unknown"},
+        {"action": "click", "elementId": "$prev"},
+        {"action": "key", "key": "enter"},
+    ]
+    assert agent.batch_path({"steps": json.dumps(steps)}) == [(900, 700), (1115, 751)]
+    assert agent.batch_path({"steps": "not json"}) == []
+
+
+def test_screenshots_go_to_the_vision_model_whichever_model_leads(tmp_path, monkeypatch):
+    from dark_cli.agent import DEFAULT_BASE, VISION_MODEL
+
+    monkeypatch.delenv("DARK_VISION_MODEL", raising=False)
+    for model in ("deepseek-v4.1-flash-fast", "minimax-m3.1-flash", "glm-5.3-abliterated"):
+        agent = Agent(ModelConfig(DEFAULT_BASE, model, "test-key"), tmp_path)
+        assert agent.vision_model() == VISION_MODEL
+    other = Agent(ModelConfig("https://model.example/v1", "their-model", "test-key"), tmp_path)
+    assert other.vision_model() == "their-model"
+    monkeypatch.setenv("DARK_VISION_MODEL", "custom-vision")
+    assert other.vision_model() == "custom-vision"
+
+
+def test_chat_saves_each_turn_and_can_resume_it(tmp_path):
+    from dark_cli import chat, sessions
+
+    instance = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "glm-x", "test-key"))
+    instance.agent.messages = [
+        {"role": "user", "content": "find the bug"},
+        {"role": "assistant", "content": "Found it in save()."},
+    ]
+    first_id = instance.session_id
+    instance.save_session()
+    assert [entry["id"] for entry in sessions.recent()] == [first_id]
+
+    # A fresh chat lists the saved conversation and resumes it by number.
+    other = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "glm-x", "test-key"))
+    other.list_sessions()
+    assert other.resume_ids == [first_id]
+    other.resume("1")
+    assert other.session_id == first_id
+    assert other.agent.messages[0]["content"] == "find the bug"
+
+
+def test_clear_starts_a_new_session_without_erasing_the_saved_one(tmp_path):
+    from dark_cli import chat, sessions
+
+    instance = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "glm-x", "test-key"))
+    instance.agent.messages = [{"role": "user", "content": "keep me"}]
+    instance.save_session()
+    saved_id = instance.session_id
+    instance.agent.clear()
+    instance.session_id = sessions.new_id()
+    assert instance.session_id != saved_id
+    assert sessions.load(saved_id) is not None
+
+
+def test_resume_rejects_an_unknown_number(tmp_path):
+    from dark_cli import chat
+
+    instance = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "glm-x", "test-key"))
+    with pytest.raises(AgentError):
+        instance.resume("7")
+
+
+def test_launch_resume_reopens_the_most_recent_conversation(tmp_path):
+    from dark_cli import chat
+
+    first = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "glm-x", "test-key"))
+    first.agent.messages = [{"role": "user", "content": "earlier work"}]
+    first.save_session()
+    later = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "glm-x", "test-key"))
+    later.resume_last()
+    assert later.session_id == first.session_id
+    assert later.agent.messages[0]["content"] == "earlier work"
+
+
+def test_resume_does_not_import_another_workspaces_context(tmp_path):
+    from dark_cli import chat
+
+    config = ModelConfig("https://model.example/v1", "test", "native-secret")
+    first = chat.Chat(tmp_path / "first", config)
+    first.agent.messages = [{"role": "user", "content": "work in first"}]
+    first.save_session()
+    second = chat.Chat(tmp_path / "second", config)
+    second.resume_last()
+    assert second.agent.messages == []
+    assert second.session_id != first.session_id
+
+
+def test_input_history_redacts_the_current_model_key(tmp_path):
+    from dark_cli import chat, sessions
+
+    instance = chat.Chat(tmp_path, ModelConfig("https://model.example/v1", "test", "first-secret"))
+    history = instance.history()
+    history.store_string("do not store first-secret")
+    instance.config = ModelConfig("https://model.example/v1", "test", "second-secret")
+    history.store_string("do not store second-secret")
+    text = sessions.history_file().read_text(encoding="utf-8")
+    assert "first-secret" not in text and "second-secret" not in text
